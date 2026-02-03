@@ -72,7 +72,6 @@ app.use(helmet({
 // Middleware para redirect HTTP → HTTPS em produção
 if (NODE_ENV === 'production') {
     app.use((req, res, next) => {
-        // Verifica header x-forwarded-proto (comum em proxies/load balancers)
         if (req.headers['x-forwarded-proto'] !== 'https' && req.hostname !== 'localhost') {
             return res.redirect(301, `https://${req.hostname}${req.url}`);
         }
@@ -83,16 +82,19 @@ if (NODE_ENV === 'production') {
 // CORS - Restringir apenas a domínios permitidos
 app.use(cors({
     origin: function(origin, callback) {
-        if (!origin || allowedOrigins.includes(origin)) {
+        // Se for localhost ou estiver na lista de permitidos, aceita
+        if (!origin || allowedOrigins.some(domain => origin.includes(domain))) {
             callback(null, true);
         } else {
+            console.log("CORS Bloqueado para:", origin);
             callback(new Error('Origem não permitida pelo CORS'));
         }
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
-    allowedHeaders: ['Content-Type']
+    allowedHeaders: ['Content-Type', 'Authorization']
 }));
+
 
 // Rate Limiting - Proteção contra força bruta
 const loginLimiter = rateLimit({
@@ -127,10 +129,13 @@ app.use(session({
     secret: SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
+    proxy: true, // ADICIONE ESTA LINHA: Essencial para o Render
     cookie: {
-        secure: NODE_ENV === 'production', // HTTPS em produção
+        // Mudamos para false temporariamente para garantir que o cookie funcione no Render
+        secure: false, 
         httpOnly: true,
-        sameSite: 'strict',
+        // Mudamos para 'lax' para permitir o redirecionamento entre páginas
+        sameSite: 'lax', 
         maxAge: 24 * 60 * 60 * 1000 // 24 horas
     }
 }));
