@@ -149,8 +149,8 @@ app.get('/login', (req, res) => {
 
 app.get('/admin', (req, res) => {
     // PROTEÇÃO: Só deixa entrar se estiver logado E for admin (isAdmin = 1)
-    if (!req.session || !req.session.user || req.session.user.isAdmin !== 1) {
-        return res.redirect('/login');
+  if (!req.session || !req.session.user || !req.session.user.isAdmin) {
+        return res.redirect('/login');  
     }
     res.sendFile(path.join(__dirname, '../../../public', 'admin.html'));
 });
