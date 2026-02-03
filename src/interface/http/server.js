@@ -28,6 +28,7 @@ const container = require('../../infrastructure/config/container');
 
 // Criar aplicação Express
 const app = express();
+app.set('trust proxy', 1);
 const PORT = process.env.PORT || 3000;
 const NODE_ENV = process.env.NODE_ENV || 'development';
 const SESSION_SECRET = process.env.SESSION_SECRET || 'dev-secret-key-change-in-production';
@@ -48,10 +49,10 @@ app.use(helmet({
         directives: {
             defaultSrc: ["'self'"],
             scriptSrc: ["'self'"],
-            styleSrc: ["'self'", "'unsafe-inline'"], // unsafe-inline necessário para estilos dinâmicos
-            imgSrc: ["'self'", "data:", "https:"],
+            styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+            imgSrc: ["'self'", "data:", "https:"], // Permite imagens de qualquer site HTTPS
             connectSrc: ["'self'"],
-            fontSrc: ["'self'"],
+            fontSrc: ["'self'", "https://fonts.gstatic.com"],
             objectSrc: ["'none'"],
             frameSrc: ["'none'"],
             upgradeInsecureRequests: NODE_ENV === 'production' ? [] : null
@@ -147,6 +148,10 @@ app.get('/login', (req, res) => {
 });
 
 app.get('/admin', (req, res) => {
+    // PROTEÇÃO: Só deixa entrar se estiver logado E for admin (isAdmin = 1)
+    if (!req.session || !req.session.user || req.session.user.isAdmin !== 1) {
+        return res.redirect('/login');
+    }
     res.sendFile(path.join(__dirname, '../../../public', 'admin.html'));
 });
 
