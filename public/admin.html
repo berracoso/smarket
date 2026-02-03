@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin - Bolão Privado</title>
+    <link rel="stylesheet" href="flash-message.css">
+    <link rel="stylesheet" href="css/admin.css">
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎛️ Painel Administrativo</h1>
+            <p>Controle do Bolão Privado</p>
+            <button class="btn btn-danger btn-small" id="btnLogout" style="position: absolute; top: 20px; right: 20px;">
+                Sair
+            </button>
+        </div>
+
+        <div id="alertContainer"></div>
+
+        <!-- Status e Estatísticas -->
+        <div class="card">
+            <h2>📊 Status do Evento</h2>
+            <div class="status-section" id="statusSection"></div>
+
+            <div style="margin-top: 20px;">
+                <button class="btn btn-success" id="btnAbrir">
+                    ✅ Abrir Apostas
+                </button>
+                <button class="btn btn-danger" id="btnFechar">
+                    🔒 Fechar Apostas
+                </button>
+                <button class="btn btn-warning" id="btnReset">
+                    🔄 Novo evento
+                </button>
+                <a href="/" class="btn btn-primary">
+                    👥 Ver Página Pública
+                </a>
+            </div>
+        </div>
+
+        <!-- Lista de Apostas -->
+        <div class="card">
+            <h2>💰 Apostas Registradas</h2>
+            <div class="apostas-list" id="apostasContainer"></div>
+        </div>
+
+        <!-- Gestão de Usuários -->
+        <div class="card">
+            <h2>👥 Gestão de Usuários</h2>
+            <div id="usuariosContainer"></div>
+        </div>
+
+        <!-- Definir Vencedor -->
+        <div class="card" id="vencedorCard">
+            <h2>🏆 Definir Vencedor</h2>
+            <div class="alert alert-warning" id="vencedorAlert">
+                ⚠️ Feche as apostas antes de definir o vencedor
+            </div>
+            <div class="vencedor-section" id="vencedorSection"></div>
+        </div>
+
+        <!-- Resultado -->
+        <div class="card" id="resultadoCard" style="display: none;">
+            <h2>🎉 Resultado do Evento</h2>
+            <div class="resultado-section" id="resultadoContainer"></div>
+        </div>
+
+        <!-- Visualizar Banco de Dados -->
+        <div class="card">
+            <h2>💾 Banco de Dados (Memória)</h2>
+            <div class="btn-group">
+                <button class="btn btn-primary btn-small" id="btnAtualizar">
+                    🔄 Atualizar
+                </button>
+                <button class="btn btn-success btn-small" id="btnCopiar">
+                    📋 Copiar JSON
+                </button>
+                <button class="btn btn-warning btn-small" id="btnBaixar">
+                    💾 Baixar JSON
+                </button>
+            </div>
+            <div class="dados-section" id="dadosContainer">
+                <pre>Carregando dados...</pre>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript da página -->
+    <script src="js/admin.js"></script>
+
+    <!-- Sistema de Flash Messages -->
+    <script src="flash-message.js"></script>
+
+    <!-- Interceptor de Requisições com Validação de Permissões -->
+    <script src="permission-interceptor.js"></script>
+</body>
+
+</html>

@@ -1,0 +1,18 @@
+node_modules/
+.env
+.DS_Store
+*.log
+calculo-apostas.md
+
+# Banco de dados SQLite
+bolao.db
+server-old.js
+
+# Cobertura de testes
+coverage/
+.nyc_output/
+*.lcov
+
+#docs
+docs/deploy/
+.github/
