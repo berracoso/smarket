@@ -148,10 +148,27 @@ app.get('/login', (req, res) => {
 });
 
 app.get('/admin', (req, res) => {
-    // PROTEÇÃO: Só deixa entrar se estiver logado E for admin (isAdmin = 1)
-  if (!req.session || !req.session.user || !req.session.user.isAdmin) {
-        return res.redirect('/login');  
+    const usuario = req.session ? req.session.user : null;
+
+    // Log para depuração (aparecerá no painel do Render)
+    console.log('Tentativa de acesso ao Admin:', usuario ? usuario.email : 'Sem sessão');
+    
+    // Verificação Robusta: Aceita se for isAdmin OU isSuperAdmin OU tipo 'superadmin'
+    const ehAdmin = usuario && (
+        usuario.isAdmin === true || 
+        usuario.isAdmin === 1 || 
+        usuario.isSuperAdmin === true || 
+        usuario.isSuperAdmin === 1 ||
+        usuario.tipo === 'superadmin' ||
+        usuario.tipo === 'admin'
+    );
+
+    if (!ehAdmin) {
+        console.log('⛔ Acesso negado. Redirecionando para login.');
+        return res.redirect('/login');
     }
+
+    console.log('✅ Acesso permitido ao Admin.');
     res.sendFile(path.join(__dirname, '../../../public', 'admin.html'));
 });
 
