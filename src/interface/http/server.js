@@ -1,6 +1,6 @@
 /**
- * Novo Server.js - CORREÇÃO DE LOOP DE LOGIN
- * Adiciona regra para forçar permissões do Super Admin e impedir o loop.
+ * Novo Server.js - CORRIGIDO
+ * Ajustado para ler req.session.usuario (conforme SessionManager)
  */
 
 require('dotenv').config();
@@ -24,7 +24,7 @@ try {
 }
 
 const app = express();
-app.set('trust proxy', 1); // Obrigatório para o Render
+app.set('trust proxy', 1);
 
 const PORT = process.env.PORT || 3000;
 const SESSION_SECRET = process.env.SESSION_SECRET || 'chave-secreta-padrao';
@@ -54,7 +54,6 @@ app.use(helmet({
 
 app.use(cors({
     origin: function(origin, callback) {
-        // Permissivo para evitar bloqueios durante o conserto
         callback(null, true);
     },
     credentials: true,
@@ -71,7 +70,7 @@ app.use(session({
     saveUninitialized: false,
     proxy: true,
     cookie: {
-        secure: false, // Importante: mantemos false para garantir que o cookie passe
+        secure: false,
         httpOnly: true,
         sameSite: 'lax',
         maxAge: 24 * 60 * 60 * 1000
@@ -85,26 +84,26 @@ app.use(express.static(path.join(__dirname, '../../../public')));
 // ========================================
 // 4. 👑 REGRA DE OURO (CORREÇÃO DO LOOP) 👑
 // ========================================
-// Este bloco roda em TODA requisição e conserta seu usuário automaticamente
 app.use(async (req, res, next) => {
     // Lista de e-mails que são sempre Donos/Admin
     const EMAILS_SUPREMOS = ['admin@bolao.com', 'moregolahenrique@gmail.com'];
 
-    if (req.session && req.session.user && EMAILS_SUPREMOS.includes(req.session.user.email)) {
+    // CORREÇÃO AQUI: Mudado de req.session.user para req.session.usuario
+    if (req.session && req.session.usuario && EMAILS_SUPREMOS.includes(req.session.usuario.email)) {
         
-        // Se a sessão diz que NÃO é admin, vamos corrigir isso agora
-        if (!req.session.user.isAdmin || !req.session.user.isSuperAdmin) {
-            console.log(`👑 [AUTO-FIX] Detectado Dono (${req.session.user.email}) sem permissão. Corrigindo...`);
+        // CORREÇÃO AQUI: Mudado de req.session.user para req.session.usuario
+        if (!req.session.usuario.isAdmin || !req.session.usuario.isSuperAdmin) {
+            console.log(`👑 [AUTO-FIX] Detectado Dono (${req.session.usuario.email}) sem permissão. Corrigindo...`);
             
-            // 1. Corrige a Sessão (Memória) - Isso para o Loop imediatamente
-            req.session.user.isAdmin = true;
-            req.session.user.isSuperAdmin = true;
-            req.session.user.tipo = 'superadmin';
+            // 1. Corrige a Sessão (Memória)
+            req.session.usuario.isAdmin = true;
+            req.session.usuario.isSuperAdmin = true;
+            req.session.usuario.tipo = 'superadmin';
 
             // 2. Tenta corrigir o Banco de Dados (Persistência)
             try {
                 const repo = container.get('usersRepository');
-                const usuarioDB = await repo.buscarPorEmail(req.session.user.email);
+                const usuarioDB = await repo.buscarPorEmail(req.session.usuario.email);
                 if (usuarioDB) {
                     usuarioDB.isAdmin = true;
                     usuarioDB.isSuperAdmin = true;
@@ -113,7 +112,7 @@ app.use(async (req, res, next) => {
                     console.log(`💾 [AUTO-FIX] Usuário atualizado no Banco de Dados com sucesso.`);
                 }
             } catch (err) {
-                console.error('Erro ao atualizar DB no auto-fix (não crítico, sessão já foi corrigida):', err.message);
+                console.error('Erro ao atualizar DB no auto-fix:', err.message);
             }
         }
     }
@@ -128,13 +127,13 @@ app.get('/', (req, res) => res.sendFile(path.join(__dirname, '../../../public', 
 app.get('/login', (req, res) => res.sendFile(path.join(__dirname, '../../../public', 'login.html')));
 
 app.get('/admin', (req, res) => {
-    const user = req.session ? req.session.user : null;
+    // CORREÇÃO AQUI: Mudado de req.session.user para req.session.usuario
+    const usuario = req.session ? req.session.usuario : null;
     
-    // Verificação simplificada
-    if (user && (user.isAdmin || user.isSuperAdmin)) {
+    if (usuario && (usuario.isAdmin || usuario.isSuperAdmin)) {
         res.sendFile(path.join(__dirname, '../../../public', 'admin.html'));
     } else {
-        console.log(`⛔ Bloqueio Admin: Usuário ${user ? user.email : 'anônimo'} tentou entrar.`);
+        console.log(`⛔ Bloqueio Admin: Tentativa de acesso negada.`);
         res.redirect('/login');
     }
 });
@@ -144,7 +143,6 @@ app.get('/admin', (req, res) => {
 // ========================================
 app.get('/health', (req, res) => res.json({ status: 'ok', uptime: process.uptime() }));
 
-// Rota manual de emergência (caso precise forçar via link)
 app.get('/fix-admin', (req, res) => {
     res.send('<h1>Auto-fix ativo</h1><p>Se você está vendo isso e está logado como admin@bolao.com, suas permissões já foram corrigidas. <a href="/admin">Ir para Admin</a></p>');
 });
@@ -160,13 +158,11 @@ try {
     console.error('Erro carregando rotas:', e);
 }
 
-// 404
 app.use((req, res) => {
     if (req.accepts('html')) return res.status(404).sendFile(path.join(__dirname, '../../../public', 'index.html'));
     res.status(404).json({ erro: 'Rota não encontrada' });
 });
 
-// Inicialização
 if (process.env.NODE_ENV !== 'test') {
     app.listen(PORT, () => {
         console.log(`🚀 Servidor rodando na porta ${PORT}`);
