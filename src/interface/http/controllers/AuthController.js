@@ -1,6 +1,6 @@
 /**
- * Controller de Autenticação
- * Gerencia registro, login e logout
+ * Controller de Autenticação - CORRIGIDO (Save Session)
+ * Gerencia registro, login e logout com garantia de persistência da sessão.
  */
 
 class AuthController {
@@ -14,7 +14,6 @@ class AuthController {
 
     /**
      * POST /auth/registro
-     * Registra novo usuário
      */
     async registro(req, res, next) {
         try {
@@ -26,10 +25,17 @@ class AuthController {
                 senha
             });
 
-            // Criar sessão automaticamente
             this.sessionManager.criarSessao(req, resultado.usuario.id, resultado.usuario);
 
-            res.status(201).json(resultado);
+            // 🔒 FIX: Força o salvamento da sessão antes de responder
+            req.session.save((err) => {
+                if (err) {
+                    console.error('Erro ao salvar sessão no registro:', err);
+                    return next(err);
+                }
+                res.status(201).json(resultado);
+            });
+
         } catch (erro) {
             next(erro);
         }
@@ -37,7 +43,6 @@ class AuthController {
 
     /**
      * POST /auth/login
-     * Autentica usuário
      */
     async login(req, res, next) {
         try {
@@ -48,10 +53,20 @@ class AuthController {
                 senha
             });
 
-            // Criar sessão
+            // Cria a sessão na memória
             this.sessionManager.criarSessao(req, resultado.usuario.id, resultado.usuario);
 
-            res.json(resultado);
+            // 🔒 FIX CRÍTICO: Espera a sessão ser gravada no disco/memória
+            // Isso impede que o redirecionamento aconteça antes do login "pegar"
+            req.session.save((err) => {
+                if (err) {
+                    console.error('Erro ao salvar sessão no login:', err);
+                    return next(err);
+                }
+                console.log(`✅ Login salvo com sucesso para: ${email}`);
+                res.json(resultado);
+            });
+
         } catch (erro) {
             next(erro);
         }
@@ -59,19 +74,12 @@ class AuthController {
 
     /**
      * POST /auth/logout
-     * Encerra sessão
      */
     async logout(req, res, next) {
         try {
             await this.fazerLogoutUseCase.executar();
-
-            // Destruir sessão
             await this.sessionManager.destruirSessao(req);
-
-            res.json({
-                sucesso: true,
-                mensagem: 'Logout realizado com sucesso'
-            });
+            res.json({ sucesso: true, mensagem: 'Logout realizado com sucesso' });
         } catch (erro) {
             next(erro);
         }
@@ -79,12 +87,10 @@ class AuthController {
 
     /**
      * GET /auth/me
-     * Retorna dados do usuário autenticado
      */
     async me(req, res, next) {
         try {
             const resultado = await this.obterUsuarioAtualUseCase.executar(req.userId);
-
             res.json(resultado);
         } catch (erro) {
             next(erro);
