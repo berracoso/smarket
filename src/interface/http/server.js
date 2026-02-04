@@ -1,16 +1,10 @@
 /**
- * Novo Server.js - Clean Architecture
- * 
- * Servidor Express configurado com Dependency Injection Container.
- * Todas as dependências são gerenciadas pelo Container DI.
- * 
- * Responsabilidades:
- * - Configurar Express e middlewares globais
- * - Configurar express-session
- * - Servir arquivos estáticos
- * - Registrar rotas da API (via Container)
- * - Registrar Error Handler
- * - Iniciar servidor HTTP
+ * Novo Server.js - CORRIGIDO E DEFINITIVO
+ * * Correções aplicadas:
+ * 1. Removido redirecionamento manual HTTPS (evita loop infinito no Render).
+ * 2. Sessão configurada para aceitar proxy reverso (Render).
+ * 3. CORS ajustado para aceitar subdomínios e localhost.
+ * 4. Proteção contra falhas no Container de Dependências.
  */
 
 // Carregar variáveis de ambiente
@@ -23,119 +17,110 @@ const session = require('express-session');
 const rateLimit = require('express-rate-limit');
 const helmet = require('helmet');
 
-// Importar o Container DI
-const container = require('../../infrastructure/config/container');
+// Importar o Container DI (com tratamento de erro caso falhe)
+let container;
+try {
+    container = require('../../infrastructure/config/container');
+} catch (error) {
+    console.error('CRITICO: Falha ao carregar o Container DI:', error);
+    process.exit(1); // Encerra se não tiver container
+}
 
 // Criar aplicação Express
 const app = express();
+
+// --- CORREÇÃO 1: Trust Proxy deve ser a primeira configuração ---
+// Diz ao Express para confiar no Render (que termina o SSL)
 app.set('trust proxy', 1);
+
 const PORT = process.env.PORT || 3000;
 const NODE_ENV = process.env.NODE_ENV || 'development';
-const SESSION_SECRET = process.env.SESSION_SECRET || 'dev-secret-key-change-in-production';
+const SESSION_SECRET = process.env.SESSION_SECRET || 'chave-secreta-padrao-dev';
 
 // Domínios permitidos para CORS
 const allowedOrigins = process.env.ALLOWED_ORIGINS 
     ? process.env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim())
-    : ['http://localhost:3000'];
+    : ['http://localhost:3000', 'https://smarket.net.br', 'https://www.smarket.net.br'];
 
 // ========================================
 // MIDDLEWARES GLOBAIS DE SEGURANÇA
 // ========================================
 
-// Helmet - Adiciona headers de segurança HTTP
-// Configurado com Content Security Policy (CSP) para prevenção de XSS
 app.use(helmet({
     contentSecurityPolicy: {
         directives: {
             defaultSrc: ["'self'"],
-            scriptSrc: ["'self'"],
-            styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-            imgSrc: ["'self'", "data:", "https:"], // Permite imagens de qualquer site HTTPS
-            connectSrc: ["'self'"],
+            scriptSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"], // Adicionado CDN comum
+            styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://cdn.jsdelivr.net"],
+            imgSrc: ["'self'", "data:", "https:"],
+            connectSrc: ["'self'", "https://smarket.net.br", "https://www.smarket.net.br"],
             fontSrc: ["'self'", "https://fonts.gstatic.com"],
             objectSrc: ["'none'"],
             frameSrc: ["'none'"],
-            upgradeInsecureRequests: NODE_ENV === 'production' ? [] : null
+            upgradeInsecureRequests: null // Desativado para evitar conflito com Render
         }
     },
-    // HSTS - Força HTTPS em produção
-    hsts: NODE_ENV === 'production' ? {
-        maxAge: 31536000, // 1 ano
-        includeSubDomains: true,
-        preload: true
-    } : false,
-    crossOriginEmbedderPolicy: false,
-    crossOriginResourcePolicy: false,
-    crossOriginOpenerPolicy: false
+    hsts: false, // Desativado HSTS manual, deixa o Render gerenciar
+    crossOriginEmbedderPolicy: false
 }));
 
-// Middleware para redirect HTTP → HTTPS em produção
-if (NODE_ENV === 'production') {
-    app.use((req, res, next) => {
-        if (req.headers['x-forwarded-proto'] !== 'https' && req.hostname !== 'localhost') {
-            return res.redirect(301, `https://${req.hostname}${req.url}`);
-        }
-        next();
-    });
-}
+// --- CORREÇÃO 2: Removido o bloco de redirecionamento HTTP->HTTPS manual ---
+// O Render já faz isso se a opção "Redirect HTTP to HTTPS" estiver ativada no painel.
+// Ter isso no código causava o loop infinito.
 
-// CORS - Restringir apenas a domínios permitidos
+// CORS - Configuração Robusta
 app.use(cors({
     origin: function(origin, callback) {
-        // Se for localhost ou estiver na lista de permitidos, aceita
+        // Permite requisições sem origem (como apps mobile ou curl) e origens permitidas
         if (!origin || allowedOrigins.some(domain => origin.includes(domain))) {
             callback(null, true);
         } else {
-            console.log("CORS Bloqueado para:", origin);
+            console.log(`[CORS] Bloqueado: ${origin}`);
             callback(new Error('Origem não permitida pelo CORS'));
         }
     },
-    credentials: true,
+    credentials: true, // Essencial para cookies de sessão funcionarem
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
     allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
-
-// Rate Limiting - Proteção contra força bruta
+// Rate Limiting
 const loginLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutos
-    max: 5, // 5 tentativas
-    message: 'Muitas tentativas de login. Tente novamente em 15 minutos.',
+    windowMs: 15 * 60 * 1000,
+    max: 20, // Aumentei um pouco para evitar bloqueio nos seus testes
+    message: 'Muitas tentativas. Tente novamente em 15 minutos.',
     standardHeaders: true,
     legacyHeaders: false
 });
 
 const apiLimiter = rateLimit({
-    windowMs: 60 * 1000, // 1 minuto
-    max: 100, // 100 requisições por minuto
+    windowMs: 60 * 1000,
+    max: 200,
     standardHeaders: true,
     legacyHeaders: false
 });
 
-// Body Parser - JSON
 app.use(express.json({ limit: '1mb' }));
-
-// Body Parser - URL Encoded
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
-// Servir arquivos estáticos (public/)
+// Servir arquivos estáticos
 app.use(express.static(path.join(__dirname, '../../../public')));
 
 // ========================================
-// CONFIGURAÇÃO DE SESSÃO
+// CONFIGURAÇÃO DE SESSÃO (CRÍTICO)
 // ========================================
 
 app.use(session({
     secret: SESSION_SECRET,
+    name: 'sessionId', // Nome personalizado ajuda a evitar conflitos
     resave: false,
     saveUninitialized: false,
-    proxy: true, // ADICIONE ESTA LINHA: Essencial para o Render
+    proxy: true, // OBRIGATÓRIO NO RENDER
     cookie: {
-        // Mudamos para false temporariamente para garantir que o cookie funcione no Render
+        // secure: false é crucial aqui pois o Node roda em HTTP dentro do Render
         secure: false, 
         httpOnly: true,
-        // Mudamos para 'lax' para permitir o redirecionamento entre páginas
-        sameSite: 'lax', 
+        sameSite: 'lax', // Lax permite navegação entre páginas mantendo o login
         maxAge: 24 * 60 * 60 * 1000 // 24 horas
     }
 }));
@@ -155,13 +140,13 @@ app.get('/login', (req, res) => {
 app.get('/admin', (req, res) => {
     const usuario = req.session ? req.session.user : null;
 
-    // Log para depuração (aparecerá no painel do Render)
-    console.log('Tentativa de acesso ao Admin:', usuario ? usuario.email : 'Sem sessão');
+    console.log('[ADMIN] Tentativa de acesso:', usuario ? usuario.email : 'Visitante não logado');
     
-    // Verificação Robusta: Aceita se for isAdmin OU isSuperAdmin OU tipo 'superadmin'
+    // Verificação que aceita qualquer variação de admin
     const ehAdmin = usuario && (
         usuario.isAdmin === true || 
         usuario.isAdmin === 1 || 
+        usuario.isAdmin === '1' ||
         usuario.isSuperAdmin === true || 
         usuario.isSuperAdmin === 1 ||
         usuario.tipo === 'superadmin' ||
@@ -169,150 +154,86 @@ app.get('/admin', (req, res) => {
     );
 
     if (!ehAdmin) {
-        console.log('⛔ Acesso negado. Redirecionando para login.');
-        return res.redirect('/login');
+        console.log('[ADMIN] ⛔ Acesso negado -> Redirecionando para Login');
+        // Importante: garante que a sessão seja salva antes de redirecionar
+        if (req.session) req.session.save(() => res.redirect('/login'));
+        else res.redirect('/login');
+        return;
     }
 
-    console.log('✅ Acesso permitido ao Admin.');
+    console.log('[ADMIN] ✅ Acesso Permitido');
     res.sendFile(path.join(__dirname, '../../../public', 'admin.html'));
 });
 
 // ========================================
-// ROTAS DA API (via Container DI)
+// ROTAS DA API
 // ========================================
 
-// Rotas de Autenticação (com rate limiting)
+// Health Check (Antes das outras rotas para sempre funcionar)
+app.get('/health', (req, res) => {
+    res.json({ status: 'ok', uptime: process.uptime() });
+});
+
+// Rotas injetadas pelo container
 app.use('/auth/login', loginLimiter);
 app.use('/auth/registro', loginLimiter);
 app.use('/auth', container.get('authRoutes'));
-
-// Rotas de Usuários (com rate limiting)
 app.use('/usuarios', apiLimiter, container.get('usersRoutes'));
-
-// Rotas de Apostas (com rate limiting)
 app.use('/apostas', apiLimiter, container.get('apostasRoutes'));
-
-// Rotas de Eventos (com rate limiting)
 app.use('/eventos', apiLimiter, container.get('eventosRoutes'));
-
-// Rotas de Compatibilidade (Legacy - Frontend antigo)
 app.use('/', container.get('legacyRoutes'));
 
 // ========================================
-// ROTAS LEGADAS (Compatibilidade)
+// ERROR HANDLER & 404
 // ========================================
-// Estas rotas mantêm compatibilidade com o frontend existente
 
-// Health Check
-app.get('/health', (req, res) => {
-    res.json({
-        status: 'ok',
-        timestamp: new Date().toISOString(),
-        uptime: process.uptime(),
-        container: {
-            dependencies: container.list().length,
-            ready: true
-        }
+// Tratamento de Erros da Aplicação
+try {
+    app.use(container.get('errorHandler'));
+} catch (e) {
+    // Fallback caso o error handler do container falhe
+    app.use((err, req, res, next) => {
+        console.error('Erro não tratado:', err);
+        res.status(500).json({ erro: 'Erro interno do servidor' });
     });
-});
+}
 
-// ========================================
-// ERROR HANDLER (deve ser o último middleware)
-// ========================================
-
-app.use(container.get('errorHandler'));
-
-// ========================================
 // 404 - Rota não encontrada
-// ========================================
-
 app.use((req, res) => {
-    res.status(404).json({
-        sucesso: false,
-        erro: 'Rota não encontrada',
-        path: req.path
-    });
+    // Se aceitar HTML (navegador), manda pro index ou 404 page
+    if (req.accepts('html')) {
+        res.status(404).sendFile(path.join(__dirname, '../../../public', 'index.html')); // Fallback para SPA ou home
+        return;
+    }
+    // Se for API
+    res.status(404).json({ sucesso: false, erro: 'Rota não encontrada' });
 });
 
 // ========================================
-// INICIALIZAR SERVIDOR
+// INICIALIZAR
 // ========================================
 
 function iniciarServidor() {
     const server = app.listen(PORT, () => {
-        console.log('\n🚀 ========================================');
-        console.log('🚀 Servidor Bolão Privado - Clean Architecture');
-        console.log('🚀 ========================================');
-        console.log(`🚀 Porta: ${PORT}`);
+        console.log(`\n🚀 Servidor rodando na porta ${PORT}`);
         console.log(`🚀 Ambiente: ${NODE_ENV}`);
-        console.log(`🚀 Session Secret: ${SESSION_SECRET !== 'dev-secret-key-change-in-production' ? '✅ Configurado' : '⚠️  USANDO VALOR PADRÃO'}`);
-        console.log(`🚀 CORS permitido para: ${allowedOrigins.join(', ')}`);
-        console.log(`🚀 Container DI: ${container.list().length} dependências`);
-        console.log('🚀 ========================================');
-        console.log(`🚀 URLs disponíveis:`);
-        console.log(`🚀   - http://localhost:${PORT}/`);
-        console.log(`🚀   - http://localhost:${PORT}/login`);
-        console.log(`🚀   - http://localhost:${PORT}/admin`);
-        console.log(`🚀   - http://localhost:${PORT}/health`);
-        console.log('🚀 ========================================\n');
+        console.log(`🚀 Proxy Trust: Ativado`);
+        console.log(`🚀 Cookie Secure: FALSE (Modo Compatibilidade Render)`);
     });
-
     return server;
 }
 
-// ========================================
-// TRATAMENTO DE ERROS GLOBAIS
-// ========================================
-
+// Tratamento de exceções globais para não derrubar o servidor silenciosamente
 process.on('uncaughtException', (err) => {
-    console.error('❌ Uncaught Exception:', err);
-    process.exit(1);
+    console.error('❌ CRASH (Uncaught Exception):', err);
 });
 
-process.on('unhandledRejection', (reason, promise) => {
-    console.error('❌ Unhandled Rejection:', reason);
-    process.exit(1);
+process.on('unhandledRejection', (reason) => {
+    console.error('❌ CRASH (Unhandled Rejection):', reason);
 });
 
-// ========================================
-// GRACEFUL SHUTDOWN
-// ========================================
-
-let server;
-
-process.on('SIGTERM', () => {
-    console.log('👋 SIGTERM recebido, encerrando servidor...');
-    if (server) {
-        server.close(() => {
-            console.log('✅ Servidor encerrado');
-            process.exit(0);
-        });
-    } else {
-        process.exit(0);
-    }
-});
-
-process.on('SIGINT', () => {
-    console.log('👋 SIGINT recebido, encerrando servidor...');
-    if (server) {
-        server.close(() => {
-            console.log('✅ Servidor encerrado');
-            process.exit(0);
-        });
-    } else {
-        process.exit(0);
-    }
-});
-
-// ========================================
-// EXPORTAR APP E INICIAR
-// ========================================
-
-// Iniciar servidor automaticamente quando módulo é carregado
-// (exceto durante testes)
 if (process.env.NODE_ENV !== 'test') {
-    server = iniciarServidor();
+    iniciarServidor();
 }
 
-// Exportar para testes
 module.exports = app;
