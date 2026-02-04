@@ -125,6 +125,20 @@ app.use(session({
     }
 }));
 
+app.use((req, res, next) => {
+    // ⚠️ MUDE PARA O SEU E-MAIL CADASTRADO NO SITE
+    const emailDono = 'moregolahenrique@gmail.com'; 
+
+    if (req.session && req.session.user && req.session.user.email === emailDono) {
+        console.log(`👑 [SISTEMA] Concedendo poderes de Super Admin para: ${emailDono}`);
+        // Força todas as permissões possíveis
+        req.session.user.isAdmin = true;
+        req.session.user.isSuperAdmin = true;
+        req.session.user.tipo = 'superadmin'; // ou o valor que seu banco usa ('admin', etc)
+    }
+    next();
+});
+
 // ========================================
 // ROTAS HTML (Páginas)
 // ========================================
