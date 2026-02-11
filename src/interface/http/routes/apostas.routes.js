@@ -1,54 +1,47 @@
-/**
- * Rotas de Apostas
- * Criação, listagem e simulação de apostas
- */
+const { Router } = require('express');
+const ApostasController = require('../controllers/ApostasController');
 
-const express = require('express');
+// Importando dependências do container
+const {
+    criarAposta,
+    listarMinhasApostas,
+    obterHistoricoApostas,
+    calcularRetornoEstimado,
+    authenticationMiddleware,
+    authorizationMiddleware
+} = require('../../../infrastructure/config/container');
 
-module.exports = (apostasController, authMiddleware, authorizationMiddleware) => {
-    const router = express.Router();
+const router = Router();
 
-    /**
-     * Todas as rotas requerem autenticação
-     */
-    router.use(authMiddleware.requireAuth());
+// Instanciando o controller com os casos de uso
+const apostasController = new ApostasController(
+    criarAposta,
+    listarMinhasApostas,
+    obterHistoricoApostas,
+    calcularRetornoEstimado
+);
 
-    /**
-     * POST /apostas
-     * Cria nova aposta
-     * Requer: Autenticação + Permissão para apostar (não Super Admin)
-     */
-    router.post('/', authorizationMiddleware.canBet(), (req, res, next) => {
-        apostasController.criar(req, res, next);
-    });
+// Todas as rotas requerem autenticação
+router.use(authenticationMiddleware.requireAuth());
 
-    /**
-     * GET /apostas/minhas
-     * Lista apostas do usuário no evento ativo
-     * Requer: Autenticação
-     */
-    router.get('/minhas', (req, res, next) => {
-        apostasController.minhas(req, res, next);
-    });
+// POST /apostas - Criar nova aposta (Requer permissão de aposta)
+router.post('/', authorizationMiddleware.canBet(), (req, res, next) => {
+    apostasController.criar(req, res, next);
+});
 
-    /**
-     * GET /apostas/historico
-     * Lista histórico completo de apostas
-     * Requer: Autenticação
-     * Query params: eventoId?, limite?, pagina?
-     */
-    router.get('/historico', (req, res, next) => {
-        apostasController.historico(req, res, next);
-    });
+// GET /apostas/minhas - Listar minhas apostas
+router.get('/minhas', (req, res, next) => {
+    apostasController.minhas(req, res, next);
+});
 
-    /**
-     * POST /apostas/simular
-     * Calcula retorno estimado de uma aposta
-     * Requer: Autenticação
-     */
-    router.post('/simular', (req, res, next) => {
-        apostasController.simular(req, res, next);
-    });
+// GET /apostas/historico - Histórico geral
+router.get('/historico', (req, res, next) => {
+    apostasController.historico(req, res, next);
+});
 
-    return router;
-};
+// POST /apostas/simular - Simular retorno
+router.post('/simular', (req, res, next) => {
+    apostasController.simular(req, res, next);
+});
+
+module.exports = router;
