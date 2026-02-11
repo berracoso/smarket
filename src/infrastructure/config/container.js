@@ -1,5 +1,5 @@
 /**
- * Container de Injeção de Dependência (Versão PostgreSQL - Correção Final Middlewares)
+ * Container de Injeção de Dependência (Versão PostgreSQL - Definitiva)
  */
 
 // 1. Database
@@ -19,16 +19,13 @@ const RegistrarUsuario = require('../../application/use-cases/autenticacao/Regis
 const FazerLogin = require('../../application/use-cases/autenticacao/FazerLogin');
 const FazerLogout = require('../../application/use-cases/autenticacao/FazerLogout');
 const ObterUsuarioAtual = require('../../application/use-cases/autenticacao/ObterUsuarioAtual');
-
 const CriarAposta = require('../../application/use-cases/apostas/CriarAposta');
 const ListarMinhasApostas = require('../../application/use-cases/apostas/ListarMinhasApostas');
 const CalcularRetornoEstimado = require('../../application/use-cases/apostas/CalcularRetornoEstimado');
 const ObterHistoricoApostas = require('../../application/use-cases/apostas/ObterHistoricoApostas');
-
 const ListarUsuarios = require('../../application/use-cases/usuarios/ListarUsuarios');
 const PromoverUsuario = require('../../application/use-cases/usuarios/PromoverUsuario');
 const RebaixarUsuario = require('../../application/use-cases/usuarios/RebaixarUsuario');
-
 const CriarNovoEvento = require('../../application/use-cases/eventos/CriarNovoEvento');
 const ObterEventoAtivo = require('../../application/use-cases/eventos/ObterEventoAtivo');
 const AbrirFecharApostas = require('../../application/use-cases/eventos/AbrirFecharApostas');
@@ -87,20 +84,16 @@ class Container {
     }
 
     _setupInterface() {
-        // CORREÇÃO: No seu arquivo authentication.js, a classe retorna o objeto no constructor.
-        // Instanciamos uma vez e garantimos que o objeto retornado seja o que usamos.
-        const authMiddlewareInstance = new AuthenticationMiddleware(this.instances.sessionManager);
-        this.instances.authMiddleware = authMiddlewareInstance;
-
-        // O mesmo para AuthorizationMiddleware
-        const authzMiddlewareInstance = new AuthorizationMiddleware(this.instances.usuarioRepository);
-        this.instances.authzMiddleware = authzMiddlewareInstance;
+        // CORREÇÃO: Instanciando as classes normalmente como manda seu código
+        this.instances.authMiddleware = new AuthenticationMiddleware(this.instances.sessionManager);
+        this.instances.authzMiddleware = new AuthorizationMiddleware(this.instances.usuarioRepository);
         
         this.instances.authController = new AuthController(this.instances.registrarUsuario, this.instances.fazerLogin, this.instances.fazerLogout, this.instances.obterUsuarioAtual);
         this.instances.usersController = new UsersController(this.instances.listarUsuarios, this.instances.promoverUsuario, this.instances.rebaixarUsuario);
         this.instances.apostasController = new ApostasController(this.instances.criarAposta, this.instances.listarMinhasApostas, this.instances.obterHistoricoApostas, this.instances.calcularRetornoEstimado);
         this.instances.eventosController = new EventosController(this.instances.criarNovoEvento, this.instances.obterEventoAtivo, this.instances.definirVencedor, this.instances.abrirFecharApostas, this.instances.resetarEvento);
 
+        // Injeção nas rotas
         this.instances.authRoutes = createAuthRoutes(this.instances.authController, this.instances.authMiddleware);
         this.instances.usersRoutes = createUsersRoutes(this.instances.usersController, this.instances.authzMiddleware);
         this.instances.apostasRoutes = createApostasRoutes(this.instances.apostasController, this.instances.authMiddleware);
