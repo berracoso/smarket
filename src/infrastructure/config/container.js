@@ -1,5 +1,5 @@
 /**
- * Container de Injeção de Dependência (Versão PostgreSQL Corrigida)
+ * Container de Injeção de Dependência (Versão PostgreSQL Corrigida Final)
  */
 
 // 1. Database
@@ -41,7 +41,8 @@ const UsersController = require('../../interface/http/controllers/UsersControlle
 const ApostasController = require('../../interface/http/controllers/ApostasController');
 const EventosController = require('../../interface/http/controllers/EventosController');
 
-const AuthenticationMiddleware = require('../../interface/http/middlewares/authentication');
+// Middlewares - Importados como funções (padrão do seu projeto)
+const authenticationMiddleware = require('../../interface/http/middlewares/authentication');
 const AuthorizationMiddleware = require('../../interface/http/middlewares/authorization');
 const errorHandler = require('../../interface/http/middlewares/error-handler');
 
@@ -57,22 +58,14 @@ class Container {
     }
 
     _initialize() {
-        // Setup Database
         this.instances.db = db;
-
-        // Setup Repositories
         this.instances.usuarioRepository = new UsuarioRepository(db);
         this.instances.eventoRepository = new EventoRepository(db);
         this.instances.apostaRepository = new ApostaRepository(db);
-
-        // Setup Security
         this.instances.bcryptHasher = new BcryptHasher();
         this.instances.sessionManager = new SessionManager();
 
-        // Setup Use Cases
         this._setupUseCases();
-
-        // Setup Middlewares & Controllers
         this._setupInterface();
     }
 
@@ -81,16 +74,13 @@ class Container {
         this.instances.fazerLogin = new FazerLogin(this.instances.usuarioRepository, this.instances.bcryptHasher, this.instances.sessionManager);
         this.instances.fazerLogout = new FazerLogout(this.instances.sessionManager);
         this.instances.obterUsuarioAtual = new ObterUsuarioAtual(this.instances.usuarioRepository);
-
         this.instances.listarUsuarios = new ListarUsuarios(this.instances.usuarioRepository);
         this.instances.promoverUsuario = new PromoverUsuario(this.instances.usuarioRepository);
         this.instances.rebaixarUsuario = new RebaixarUsuario(this.instances.usuarioRepository);
-
         this.instances.criarAposta = new CriarAposta(this.instances.apostaRepository, this.instances.eventoRepository);
         this.instances.listarMinhasApostas = new ListarMinhasApostas(this.instances.apostaRepository);
         this.instances.calcularRetornoEstimado = new CalcularRetornoEstimado(this.instances.apostaRepository, this.instances.eventoRepository);
         this.instances.obterHistoricoApostas = new ObterHistoricoApostas(this.instances.apostaRepository);
-
         this.instances.criarNovoEvento = new CriarNovoEvento(this.instances.eventoRepository);
         this.instances.obterEventoAtivo = new ObterEventoAtivo(this.instances.eventoRepository);
         this.instances.abrirFecharApostas = new AbrirFecharApostas(this.instances.eventoRepository);
@@ -99,66 +89,26 @@ class Container {
     }
 
     _setupInterface() {
-        // Middlewares
-        this.instances.authMiddleware = new AuthenticationMiddleware(this.instances.sessionManager);
+        // CORREÇÃO: No seu código, o authenticationMiddleware é uma FUNÇÃO que retorna um objeto com requireAuth
+        this.instances.authMiddleware = authenticationMiddleware(this.instances.sessionManager);
         this.instances.authzMiddleware = new AuthorizationMiddleware(this.instances.usuarioRepository);
         
-        // Controllers
-        this.instances.authController = new AuthController(
-            this.instances.registrarUsuario,
-            this.instances.fazerLogin,
-            this.instances.fazerLogout,
-            this.instances.obterUsuarioAtual
-        );
+        this.instances.authController = new AuthController(this.instances.registrarUsuario, this.instances.fazerLogin, this.instances.fazerLogout, this.instances.obterUsuarioAtual);
+        this.instances.usersController = new UsersController(this.instances.listarUsuarios, this.instances.promoverUsuario, this.instances.rebaixarUsuario);
+        this.instances.apostasController = new ApostasController(this.instances.criarAposta, this.instances.listarMinhasApostas, this.instances.obterHistoricoApostas, this.instances.calcularRetornoEstimado);
+        this.instances.eventosController = new EventosController(this.instances.criarNovoEvento, this.instances.obterEventoAtivo, this.instances.definirVencedor, this.instances.abrirFecharApostas, this.instances.resetarEvento);
 
-        this.instances.usersController = new UsersController(
-            this.instances.listarUsuarios,
-            this.instances.promoverUsuario,
-            this.instances.rebaixarUsuario
-        );
+        // Rotas
+        this.instances.authRoutes = createAuthRoutes(this.instances.authController, this.instances.authMiddleware);
+        
+        // Passando authzMiddleware para as rotas de usuários (Admin)
+        this.instances.usersRoutes = createUsersRoutes(this.instances.usersController, this.instances.authzMiddleware);
 
-        this.instances.apostasController = new ApostasController(
-            this.instances.criarAposta,
-            this.instances.listarMinhasApostas,
-            this.instances.obterHistoricoApostas,
-            this.instances.calcularRetornoEstimado
-        );
-
-        this.instances.eventosController = new EventosController(
-            this.instances.criarNovoEvento,
-            this.instances.obterEventoAtivo,
-            this.instances.definirVencedor,
-            this.instances.abrirFecharApostas,
-            this.instances.resetarEvento
-        );
-
-        // Routes
-        this.instances.authRoutes = createAuthRoutes(
-            this.instances.authController,
-            this.instances.authMiddleware
-        );
-
-        // CORREÇÃO AQUI: Passando authzMiddleware (que tem o requireAdmin)
-        this.instances.usersRoutes = createUsersRoutes(
-            this.instances.usersController,
-            this.instances.authzMiddleware 
-        );
-
-        this.instances.apostasRoutes = createApostasRoutes(
-            this.instances.apostasController,
-            this.instances.authMiddleware
-        );
-
-        this.instances.eventosRoutes = createEventosRoutes(
-            this.instances.eventosController,
-            this.instances.authMiddleware
-        );
+        this.instances.apostasRoutes = createApostasRoutes(this.instances.apostasController, this.instances.authMiddleware);
+        this.instances.eventosRoutes = createEventosRoutes(this.instances.eventosController, this.instances.authMiddleware);
         
         const createLegacyRoutes = require('../../interface/http/routes/legacy.routes');
-        this.instances.legacyRoutes = createLegacyRoutes(
-            this.instances.eventosController,
-            this.instances.authMiddleware
-        );
+        this.instances.legacyRoutes = createLegacyRoutes(this.instances.eventosController, this.instances.authMiddleware);
     }
 
     get(name) {
