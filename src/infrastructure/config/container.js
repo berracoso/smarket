@@ -1,5 +1,5 @@
 /**
- * Container de Injeção de Dependência (Versão PostgreSQL - Correção de Classe)
+ * Container de Injeção de Dependência (Versão PostgreSQL - Correção Final Middlewares)
  */
 
 // 1. Database
@@ -43,7 +43,6 @@ const EventosController = require('../../interface/http/controllers/EventosContr
 
 const AuthenticationMiddleware = require('../../interface/http/middlewares/authentication');
 const AuthorizationMiddleware = require('../../interface/http/middlewares/authorization');
-const errorHandler = require('../../interface/http/middlewares/error-handler');
 
 const createAuthRoutes = require('../../interface/http/routes/auth.routes');
 const createUsersRoutes = require('../../interface/http/routes/users.routes');
@@ -88,9 +87,14 @@ class Container {
     }
 
     _setupInterface() {
-        // CORREÇÃO: Usando 'new' para instanciar a classe AuthenticationMiddleware
-        this.instances.authMiddleware = new AuthenticationMiddleware(this.instances.sessionManager);
-        this.instances.authzMiddleware = new AuthorizationMiddleware(this.instances.usuarioRepository);
+        // CORREÇÃO: No seu arquivo authentication.js, a classe retorna o objeto no constructor.
+        // Instanciamos uma vez e garantimos que o objeto retornado seja o que usamos.
+        const authMiddlewareInstance = new AuthenticationMiddleware(this.instances.sessionManager);
+        this.instances.authMiddleware = authMiddlewareInstance;
+
+        // O mesmo para AuthorizationMiddleware
+        const authzMiddlewareInstance = new AuthorizationMiddleware(this.instances.usuarioRepository);
+        this.instances.authzMiddleware = authzMiddlewareInstance;
         
         this.instances.authController = new AuthController(this.instances.registrarUsuario, this.instances.fazerLogin, this.instances.fazerLogout, this.instances.obterUsuarioAtual);
         this.instances.usersController = new UsersController(this.instances.listarUsuarios, this.instances.promoverUsuario, this.instances.rebaixarUsuario);
