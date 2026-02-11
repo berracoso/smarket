@@ -1,11 +1,11 @@
 /**
- * Container de Injeção de Dependência (Versão PostgreSQL - Estabilizada)
+ * Container de Injeção de Dependência (Versão PostgreSQL - Corrigida)
  */
 
 // 1. Banco de Dados
 const db = require('../database/postgres');
 
-// 2. Repositórios (IMPORTANTE: Usando Postgres agora)
+// 2. Repositórios
 const UsuarioRepository = require('../repositories/PostgresUsuarioRepository');
 const EventoRepository = require('../repositories/PostgresEventoRepository');
 const ApostaRepository = require('../repositories/PostgresApostaRepository');
@@ -40,6 +40,7 @@ const EventosController = require('../../interface/http/controllers/EventosContr
 
 const AuthenticationMiddleware = require('../../interface/http/middlewares/authentication');
 const AuthorizationMiddleware = require('../../interface/http/middlewares/authorization');
+const ErrorHandler = require('../../interface/http/middlewares/error-handler'); // <--- [FIX] Importado
 
 const createAuthRoutes = require('../../interface/http/routes/auth.routes');
 const createUsersRoutes = require('../../interface/http/routes/users.routes');
@@ -66,6 +67,7 @@ class Container {
         // MIDDLEWARES (Instanciar ANTES das rotas)
         this.instances.authMiddleware = new AuthenticationMiddleware(this.instances.sessionManager);
         this.instances.authzMiddleware = new AuthorizationMiddleware(this.instances.usuarioRepository);
+        this.instances.errorHandler = ErrorHandler; // <--- [FIX] Registrado no container
 
         // Use Cases
         this.instances.registrarUsuario = new RegistrarUsuario(this.instances.usuarioRepository, this.instances.bcryptHasher);
