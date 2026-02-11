@@ -2,18 +2,19 @@
  * Container de Injeção de Dependência (Versão PostgreSQL - Estabilizada)
  */
 
+// 1. Banco de Dados
 const db = require('../database/postgres');
 
-// Repositories
+// 2. Repositórios (IMPORTANTE: Usando Postgres agora)
 const UsuarioRepository = require('../repositories/PostgresUsuarioRepository');
 const EventoRepository = require('../repositories/PostgresEventoRepository');
 const ApostaRepository = require('../repositories/PostgresApostaRepository');
 
-// Security
+// 3. Segurança
 const BcryptHasher = require('../security/BcryptHasher');
 const SessionManager = require('../security/SessionManager');
 
-// Use Cases
+// 4. Use Cases
 const RegistrarUsuario = require('../../application/use-cases/autenticacao/RegistrarUsuario');
 const FazerLogin = require('../../application/use-cases/autenticacao/FazerLogin');
 const FazerLogout = require('../../application/use-cases/autenticacao/FazerLogout');
@@ -31,17 +32,15 @@ const AbrirFecharApostas = require('../../application/use-cases/eventos/AbrirFec
 const DefinirVencedor = require('../../application/use-cases/eventos/DefinirVencedor');
 const ResetarEvento = require('../../application/use-cases/eventos/ResetarEvento');
 
-// Controllers
+// 5. Interface (Controllers & Middlewares)
 const AuthController = require('../../interface/http/controllers/AuthController');
 const UsersController = require('../../interface/http/controllers/UsersController');
 const ApostasController = require('../../interface/http/controllers/ApostasController');
 const EventosController = require('../../interface/http/controllers/EventosController');
 
-// Middlewares
 const AuthenticationMiddleware = require('../../interface/http/middlewares/authentication');
 const AuthorizationMiddleware = require('../../interface/http/middlewares/authorization');
 
-// Routes
 const createAuthRoutes = require('../../interface/http/routes/auth.routes');
 const createUsersRoutes = require('../../interface/http/routes/users.routes');
 const createApostasRoutes = require('../../interface/http/routes/apostas.routes');
@@ -54,17 +53,17 @@ class Container {
     }
 
     _initialize() {
-        // Core
+        // Core e Segurança
         this.instances.db = db;
         this.instances.bcryptHasher = new BcryptHasher();
         this.instances.sessionManager = new SessionManager();
 
-        // Repositories
+        // Repositórios (Injetando conexão Postgres)
         this.instances.usuarioRepository = new UsuarioRepository(db);
         this.instances.eventoRepository = new EventoRepository(db);
         this.instances.apostaRepository = new ApostaRepository(db);
 
-        // Middlewares
+        // MIDDLEWARES (Instanciar ANTES das rotas)
         this.instances.authMiddleware = new AuthenticationMiddleware(this.instances.sessionManager);
         this.instances.authzMiddleware = new AuthorizationMiddleware(this.instances.usuarioRepository);
 
@@ -76,34 +75,34 @@ class Container {
         this.instances.listarUsuarios = new ListarUsuarios(this.instances.usuarioRepository);
         this.instances.promoverUsuario = new PromoverUsuario(this.instances.usuarioRepository);
         this.instances.rebaixarUsuario = new RebaixarUsuario(this.instances.usuarioRepository);
-        this.instances.criarAposta = new CriarAposta(this.instances.apostaRepository, this.instances.eventoRepository);
-        this.instances.listarMinhasApostas = new ListarMinhasApostas(this.instances.apostaRepository);
+        this.instances.criarAposta = new CriarAposta(this.instances.apostaRepository, this.instances.eventoRepository, this.instances.usuarioRepository);
+        this.instances.listarMinhasApostas = new ListarMinhasApostas(this.instances.apostaRepository, this.instances.eventoRepository);
         this.instances.calcularRetornoEstimado = new CalcularRetornoEstimado(this.instances.apostaRepository, this.instances.eventoRepository);
-        this.instances.obterHistoricoApostas = new ObterHistoricoApostas(this.instances.apostaRepository);
-        this.instances.criarNovoEvento = new CriarNovoEvento(this.instances.eventoRepository);
-        this.instances.obterEventoAtivo = new ObterEventoAtivo(this.instances.eventoRepository);
-        this.instances.abrirFecharApostas = new AbrirFecharApostas(this.instances.eventoRepository);
-        this.instances.definirVencedor = new DefinirVencedor(this.instances.eventoRepository, this.instances.apostaRepository);
-        this.instances.resetarEvento = new ResetarEvento(this.instances.eventoRepository, this.instances.apostaRepository);
+        this.instances.obterHistoricoApostas = new ObterHistoricoApostas(this.instances.apostaRepository, this.instances.eventoRepository);
+        this.instances.criarNovoEvento = new CriarNovoEvento(this.instances.eventoRepository, this.instances.usuarioRepository);
+        this.instances.obterEventoAtivo = new ObterEventoAtivo(this.instances.eventoRepository, this.instances.apostaRepository);
+        this.instances.abrirFecharApostas = new AbrirFecharApostas(this.instances.eventoRepository, this.instances.usuarioRepository);
+        this.instances.definirVencedor = new DefinirVencedor(this.instances.eventoRepository, this.instances.apostaRepository, this.instances.usuarioRepository);
+        this.instances.resetarEvento = new ResetarEvento(this.instances.eventoRepository, this.instances.usuarioRepository);
 
         // Controllers
         this.instances.authController = new AuthController(this.instances.registrarUsuario, this.instances.fazerLogin, this.instances.fazerLogout, this.instances.obterUsuarioAtual);
         this.instances.usersController = new UsersController(this.instances.listarUsuarios, this.instances.promoverUsuario, this.instances.rebaixarUsuario);
-        this.instances.apostasController = new ApostasController(this.instances.criarAposta, this.instances.listarMinhasApostas, this.instances.obterHistoricoApostas, this.instances.calcularRetornoEstimado);
+        this.instances.apostasController = new ApostasController(this.instances.criarAposta, this.instances.listarMinhasApostas, this.instances.calcularRetornoEstimado, this.instances.obterHistoricoApostas);
         this.instances.eventosController = new EventosController(this.instances.criarNovoEvento, this.instances.obterEventoAtivo, this.instances.definirVencedor, this.instances.abrirFecharApostas, this.instances.resetarEvento);
 
-        // Routes
+        // ROTAS (Passando instâncias prontas)
         this.instances.authRoutes = createAuthRoutes(this.instances.authController, this.instances.authMiddleware);
-        this.instances.usersRoutes = createUsersRoutes(this.instances.usersController, this.instances.authzMiddleware);
-        this.instances.apostasRoutes = createApostasRoutes(this.instances.apostasController, this.instances.authMiddleware);
-        this.instances.eventosRoutes = createEventosRoutes(this.instances.eventosController, this.instances.authMiddleware);
+        this.instances.usersRoutes = createUsersRoutes(this.instances.usersController, this.instances.authMiddleware, this.instances.authzMiddleware);
+        this.instances.apostasRoutes = createApostasRoutes(this.instances.apostasController, this.instances.authMiddleware, this.instances.authzMiddleware);
+        this.instances.eventosRoutes = createEventosRoutes(this.instances.eventosController, this.instances.authMiddleware, this.instances.authzMiddleware);
         
         const createLegacyRoutes = require('../../interface/http/routes/legacy.routes');
-        this.instances.legacyRoutes = createLegacyRoutes(this.instances.eventosController, this.instances.authMiddleware);
+        this.instances.legacyRoutes = createLegacyRoutes(this.instances.apostasController, this.instances.eventosController, this.instances.authMiddleware);
     }
 
     get(name) {
-        if (!this.instances[name]) throw new Error(`Dependência não encontrada: ${name}`);
+        if (!this.instances[name]) throw new Error(`Dependência "${name}" não encontrada`);
         return this.instances[name];
     }
 }
