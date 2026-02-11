@@ -1,5 +1,5 @@
 /**
- * Container de Injeção de Dependência (Versão PostgreSQL - Corrigida)
+ * Container de Injeção de Dependência (Versão PostgreSQL - Corrigida v2)
  */
 
 // 1. Banco de Dados
@@ -40,7 +40,7 @@ const EventosController = require('../../interface/http/controllers/EventosContr
 
 const AuthenticationMiddleware = require('../../interface/http/middlewares/authentication');
 const AuthorizationMiddleware = require('../../interface/http/middlewares/authorization');
-const ErrorHandler = require('../../interface/http/middlewares/error-handler'); // <--- [FIX] Importado
+const ErrorHandler = require('../../interface/http/middlewares/error-handler');
 
 const createAuthRoutes = require('../../interface/http/routes/auth.routes');
 const createUsersRoutes = require('../../interface/http/routes/users.routes');
@@ -67,7 +67,7 @@ class Container {
         // MIDDLEWARES (Instanciar ANTES das rotas)
         this.instances.authMiddleware = new AuthenticationMiddleware(this.instances.sessionManager);
         this.instances.authzMiddleware = new AuthorizationMiddleware(this.instances.usuarioRepository);
-        this.instances.errorHandler = ErrorHandler; // <--- [FIX] Registrado no container
+        this.instances.errorHandler = ErrorHandler;
 
         // Use Cases
         this.instances.registrarUsuario = new RegistrarUsuario(this.instances.usuarioRepository, this.instances.bcryptHasher);
@@ -106,6 +106,11 @@ class Container {
     get(name) {
         if (!this.instances[name]) throw new Error(`Dependência "${name}" não encontrada`);
         return this.instances[name];
+    }
+
+    // [NOVO] Método adicionado para corrigir o erro no server.js
+    list() {
+        return Object.keys(this.instances);
     }
 }
 
