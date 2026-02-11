@@ -1,23 +1,29 @@
 /**
  * Script de Inicialização do Banco de Dados PostgreSQL
+ * CORRIGIDO: Agora falha o deploy se houver erro no banco.
  */
 require('dotenv').config();
 const { Pool } = require('pg');
 const bcrypt = require('bcryptjs');
 
+// Verificação Crítica: Sem isso, o deploy deve falhar imediatamente.
 if (!process.env.DATABASE_URL) {
-    console.error('❌ ERRO: DATABASE_URL não definida.');
+    console.error('❌ ERRO CRÍTICO: DATABASE_URL não definida.');
+    console.error('👉 No Render: Vá em Environment e adicione DATABASE_URL com a Internal URL do seu Postgres.');
     process.exit(1);
 }
 
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
-    ssl: { rejectUnauthorized: false }
+    ssl: { rejectUnauthorized: false } // Necessário para Render
 });
 
 async function setup() {
     try {
         console.log('🔧 Inicializando PostgreSQL...');
+
+        // Tenta conectar simples para validar a URL antes de criar tabelas
+        await pool.query('SELECT 1'); 
 
         // 1. Tabela Usuarios
         await pool.query(`
@@ -87,8 +93,12 @@ async function setup() {
         }
 
         console.log('\n🎉 Banco de dados PostgreSQL configurado com sucesso!');
+        process.exit(0); // Sucesso explícito
+
     } catch (err) {
-        console.error('❌ Erro no setup:', err);
+        console.error('\n❌ ERRO FATAL NO SETUP DO BANCO:', err);
+        // IMPORTANTE: Força o erro para o Render não tentar iniciar o servidor sem banco
+        process.exit(1); 
     } finally {
         await pool.end();
     }
