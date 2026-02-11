@@ -1,5 +1,5 @@
 /**
- * Container de Injeção de Dependência (Versão PostgreSQL Corrigida Final)
+ * Container de Injeção de Dependência (Versão PostgreSQL - Correção de Classe)
  */
 
 // 1. Database
@@ -41,8 +41,7 @@ const UsersController = require('../../interface/http/controllers/UsersControlle
 const ApostasController = require('../../interface/http/controllers/ApostasController');
 const EventosController = require('../../interface/http/controllers/EventosController');
 
-// Middlewares - Importados como funções (padrão do seu projeto)
-const authenticationMiddleware = require('../../interface/http/middlewares/authentication');
+const AuthenticationMiddleware = require('../../interface/http/middlewares/authentication');
 const AuthorizationMiddleware = require('../../interface/http/middlewares/authorization');
 const errorHandler = require('../../interface/http/middlewares/error-handler');
 
@@ -89,8 +88,8 @@ class Container {
     }
 
     _setupInterface() {
-        // CORREÇÃO: No seu código, o authenticationMiddleware é uma FUNÇÃO que retorna um objeto com requireAuth
-        this.instances.authMiddleware = authenticationMiddleware(this.instances.sessionManager);
+        // CORREÇÃO: Usando 'new' para instanciar a classe AuthenticationMiddleware
+        this.instances.authMiddleware = new AuthenticationMiddleware(this.instances.sessionManager);
         this.instances.authzMiddleware = new AuthorizationMiddleware(this.instances.usuarioRepository);
         
         this.instances.authController = new AuthController(this.instances.registrarUsuario, this.instances.fazerLogin, this.instances.fazerLogout, this.instances.obterUsuarioAtual);
@@ -98,12 +97,8 @@ class Container {
         this.instances.apostasController = new ApostasController(this.instances.criarAposta, this.instances.listarMinhasApostas, this.instances.obterHistoricoApostas, this.instances.calcularRetornoEstimado);
         this.instances.eventosController = new EventosController(this.instances.criarNovoEvento, this.instances.obterEventoAtivo, this.instances.definirVencedor, this.instances.abrirFecharApostas, this.instances.resetarEvento);
 
-        // Rotas
         this.instances.authRoutes = createAuthRoutes(this.instances.authController, this.instances.authMiddleware);
-        
-        // Passando authzMiddleware para as rotas de usuários (Admin)
         this.instances.usersRoutes = createUsersRoutes(this.instances.usersController, this.instances.authzMiddleware);
-
         this.instances.apostasRoutes = createApostasRoutes(this.instances.apostasController, this.instances.authMiddleware);
         this.instances.eventosRoutes = createEventosRoutes(this.instances.eventosController, this.instances.authMiddleware);
         
