@@ -1,48 +1,26 @@
-/**
- * Rotas de Autenticação
- * Registro, login e logout
- */
+const { Router } = require('express');
+const AuthController = require('../controllers/AuthController');
 
-const express = require('express');
+// Importando as dependências do container de injeção
+const { 
+  registrarUsuario, 
+  fazerLogin,
+  sessionManager // <--- Certifique-se de importar isso
+} = require('../../../infrastructure/config/container');
 
-module.exports = (authController, authMiddleware) => {
-    const router = express.Router();
+const router = Router();
 
-    /**
-     * POST /auth/registro
-     * Registra novo usuário
-     * Público
-     */
-    router.post('/registro', (req, res, next) => {
-        authController.registro(req, res, next);
-    });
+// Injetando as dependências no Controller
+// Ordem importa: (RegistrarUsuario, FazerLogin, SessionManager)
+const authController = new AuthController(registrarUsuario, fazerLogin, sessionManager);
 
-    /**
-     * POST /auth/login
-     * Autentica usuário
-     * Público
-     */
-    router.post('/login', (req, res, next) => {
-        authController.login(req, res, next);
-    });
+// Definindo as rotas e vinculando ao controller
+// Usamos arrow function ou .bind(authController) para manter o contexto do 'this'
+router.post('/registro', (req, res, next) => authController.registro(req, res, next));
+router.post('/login', (req, res, next) => authController.login(req, res, next));
 
-    /**
-     * POST /auth/logout
-     * Encerra sessão
-     * Requer autenticação
-     */
-    router.post('/logout', authMiddleware.requireAuth(), (req, res, next) => {
-        authController.logout(req, res, next);
-    });
+// Rota auxiliar para verificar token (opcional, se tiver endpoint /me)
+const authentication = require('../middlewares/authentication');
+router.get('/me', authentication, (req, res, next) => authController.me(req, res, next));
 
-    /**
-     * GET /auth/me
-     * Retorna dados do usuário autenticado
-     * Requer autenticação
-     */
-    router.get('/me', authMiddleware.requireAuth(), (req, res, next) => {
-        authController.me(req, res, next);
-    });
-
-    return router;
-};
+module.exports = router;
