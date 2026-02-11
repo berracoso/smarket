@@ -10,13 +10,13 @@ const SessionManager = require('../security/SessionManager');
 // Use Cases
 const RegistrarUsuario = require('../../application/use-cases/autenticacao/RegistrarUsuario');
 const FazerLogin = require('../../application/use-cases/autenticacao/FazerLogin');
-// ... outros use cases
+// Mantenha outros use cases que você tiver aqui...
 
-// Instanciação das dependências (Singleton)
+// Instanciação das dependências
 
-// 1. Infraestrutura Básica
+// 1. Infraestrutura
 const hasher = new BcryptHasher();
-const sessionManager = new SessionManager(); // <--- Instância do Gerenciador de Sessão
+const sessionManager = new SessionManager(); 
 
 // 2. Repositórios
 const usuarioRepository = new PostgresUsuarioRepository();
@@ -27,11 +27,10 @@ const apostaRepository = new PostgresApostaRepository();
 const registrarUsuario = new RegistrarUsuario(usuarioRepository, hasher);
 const fazerLogin = new FazerLogin(usuarioRepository, hasher);
 
-// Exportar tudo o que é necessário nos Controllers/Rotas
 module.exports = {
   // Infra
   hasher,
-  sessionManager, // <--- EXPORTAÇÃO CRÍTICA
+  sessionManager, 
 
   // Repos
   usuarioRepository,
@@ -41,5 +40,4 @@ module.exports = {
   // Use Cases
   registrarUsuario,
   fazerLogin,
-  // ... adicione outros casos de uso conforme necessário
 };

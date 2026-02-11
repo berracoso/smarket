@@ -2,17 +2,15 @@ class AuthController {
   constructor(registrarUsuario, fazerLogin, sessionManager) {
     this.registrarUsuario = registrarUsuario;
     this.fazerLogin = fazerLogin;
-    this.sessionManager = sessionManager; // <--- Faltava esta injeção
+    this.sessionManager = sessionManager; 
   }
 
   async registro(req, res, next) {
     try {
       const { nome, email, senha } = req.body;
       
-      // Executa o caso de uso de registro
       const usuario = await this.registrarUsuario.executar({ nome, email, senha });
 
-      // Cria a sessão (token JWT) logo após o registro
       const token = this.sessionManager.criarSessao(usuario);
 
       res.status(201).json({
@@ -20,7 +18,7 @@ class AuthController {
         usuario: {
           id: usuario.id,
           nome: usuario.nome,
-          email: usuario.email.endereco,
+          email: usuario.email.endereco || usuario.email,
           tipo: usuario.tipo
         },
         token
@@ -34,11 +32,9 @@ class AuthController {
     try {
       const { email, senha } = req.body;
 
-      // Executa o caso de uso de login
       const usuario = await this.fazerLogin.executar({ email, senha });
 
-      // Cria a sessão (token JWT)
-      // O erro "Cannot read properties of undefined" acontecia aqui
+      // O erro "undefined" acontecia aqui antes
       const token = this.sessionManager.criarSessao(usuario);
 
       res.status(200).json({
@@ -46,7 +42,7 @@ class AuthController {
         usuario: {
           id: usuario.id,
           nome: usuario.nome,
-          email: usuario.email.endereco,
+          email: usuario.email.endereco || usuario.email,
           tipo: usuario.tipo
         },
         token
@@ -58,7 +54,6 @@ class AuthController {
 
   async me(req, res, next) {
     try {
-      // O usuário já está anexado ao request pelo middleware de autenticação
       const usuario = req.usuario;
       
       if (!usuario) {
@@ -68,7 +63,7 @@ class AuthController {
       res.status(200).json({
         id: usuario.id,
         nome: usuario.nome,
-        email: usuario.email, // Dependendo de como o middleware popula, pode ser usuario.email
+        email: usuario.email,
         tipo: usuario.tipo
       });
     } catch (erro) {
