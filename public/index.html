@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bolão Privado - Apostas entre Amigos</title>
+    <link rel="stylesheet" href="flash-message.css">
+    <link rel="stylesheet" href="css/index.css">
+</head>
+
+<body>
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <div class="sidebar-header">
+            <h2>📊 Menu</h2>
+        </div>
+        <div class="menu-item active" id="menuApostas">
+            <span class="menu-icon">🎯</span>
+            <span>Fazer Apostas</span>
+        </div>
+        <div class="menu-item" id="menuMinhasApostas">
+            <span class="menu-icon">📋</span>
+            <span>Minhas Apostas</span>
+        </div>
+        <div class="menu-item" id="menuHistorico">
+            <span class="menu-icon">📚</span>
+            <span>Histórico</span>
+        </div>
+        <div class="menu-item" id="menuConta">
+            <span class="menu-icon">👤</span>
+            <span>Minha Conta</span>
+        </div>
+        <div class="menu-item" id="menuAdmin" style="display: none;">
+            <span class="menu-icon">⚙️</span>
+            <span>Painel Admin</span>
+        </div>
+    </div>
+
+    <!-- Barra Superior Fixa -->
+    <div class="top-bar">
+        <span class="user-name" id="userName">👤 Carregando...</span>
+        <button class="btn-logout">🚪 Sair</button>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        <!-- Seção: Fazer Apostas -->
+        <div class="section-content active" id="secaoApostas">
+            <div class="container">
+                <div class="header">
+                    <h1>🎯 Bolão Privado</h1>
+                    <p>Apostas entre amigos com odds dinâmicas</p>
+                </div>
+
+                <div id="alertContainer"></div>
+
+                <!-- Alerta para Super Admin -->
+                <div id="superAdminAlert" style="display: none;">
+                    <div class="alert alert-info">
+                        ℹ️ <strong>Conta de Gestão:</strong> Como Super Administrador, você não pode realizar apostas.
+                        Esta conta é exclusiva para administração do sistema.
+                        <a href="/admin" style="color: #1e40af; text-decoration: underline;">Ir para Painel
+                            Admin</a>
+                    </div>
+                </div>
+
+                <div class="card" id="apostaCard">
+                    <div id="statusContainer"></div>
+                    <div id="vencedorContainer"></div>
+
+                    <form id="apostaForm">
+                        <div class="form-group">
+                            <label>Escolha seu Time</label>
+                            <div class="times-grid" id="timesGrid"></div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="valor">Valor da Aposta (R$)</label>
+                            <input type="number" id="valor" placeholder="Ex: 50" min="1" step="0.01" required>
+                        </div>
+
+                        <div id="retornoContainer"></div>
+
+                        <button type="submit" class="btn btn-primary" id="btnApostar">
+                            Confirmar Aposta
+                        </button>
+                    </form>
+                </div>
+
+                <div class="card resumo-mercado">
+                    <h3>📊 Resumo do Mercado</h3>
+                    <div id="resumoContainer"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Seção: Minhas Apostas -->
+        <div class="section-content" id="secaoMinhasApostas">
+            <div class="container">
+                <div class="header">
+                    <h1>📋 Minhas Apostas</h1>
+                    <p>Acompanhe todas as suas apostas e retornos estimados</p>
+                </div>
+
+                <!-- Alerta para Super Admin -->
+                <div id="superAdminAlertMinhas" style="display: none;">
+                    <div class="card">
+                        <div class="alert alert-info">
+                            ℹ️ <strong>Conta de Gestão:</strong> Como Super Administrador, você não realiza apostas.
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h3>💰 Suas Apostas</h3>
+                    <div id="minhasApostasContainer">
+                        <p style="text-align: center; color: #999;">Carregando...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Seção: Conta -->
+        <div class="section-content" id="secaoConta">
+            <div class="container">
+                <div class="header">
+                    <h1>👤 Minha Conta</h1>
+                    <p>Informações da sua conta e permissões</p>
+                </div>
+
+                <div class="card">
+                    <h3>📄 Dados da Conta</h3>
+                    <div id="contaContainer">
+                        <p style="text-align: center; color: #999;">Carregando...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Seção: Histórico -->
+        <div class="section-content" id="secaoHistorico">
+            <div class="container">
+                <div class="header">
+                    <h1>📚 Histórico de Apostas</h1>
+                    <p>Todas as suas apostas passadas e estatísticas</p>
+                </div>
+
+                <!-- Estatísticas Gerais -->
+                <div class="card">
+                    <h3>📊 Estatísticas Gerais</h3>
+                    <div id="estatisticasContainer" class="stats-grid">
+                        <p style="text-align: center; color: #999;">Carregando...</p>
+                    </div>
+                </div>
+
+                <!-- Filtros -->
+                <div class="card">
+                    <h3>🔍 Filtros</h3>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+                        <div class="form-group">
+                            <label>Data Início</label>
+                            <input type="date" id="filtroDataInicio" class="form-control">
+                        </div>
+                        <div class="form-group">
+                            <label>Data Fim</label>
+                            <input type="date" id="filtroDataFim" class="form-control">
+                        </div>
+                        <div class="form-group">
+                            <label>Evento</label>
+                            <select id="filtroEvento" class="form-control">
+                                <option value="">Todos os eventos</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="display: flex; align-items: flex-end;">
+                            <button class="btn btn-primary" id="btnFiltrar" style="width: 100%;">
+                                🔍 Filtrar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Lista de Apostas -->
+                <div class="card">
+                    <h3>📋 Minhas Apostas Históricas</h3>
+                    <div id="historicoContainer">
+                        <p style="text-align: center; color: #999;">Carregando...</p>
+                    </div>
+                </div>
+
+                <!-- Paginação -->
+                <div id="paginacaoContainer"
+                    style="display: flex; justify-content: center; gap: 10px; margin-top: 20px;">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript da página -->
+    <script src="js/app.js"></script>
+
+    <!-- Sistema de Flash Messages -->
+    <script src="flash-message.js"></script>
+
+    <!-- Interceptor de Requisições com Validação de Permissões -->
+    <script src="permission-interceptor.js"></script>
+</body>
+
+</html>
