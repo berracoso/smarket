@@ -116,3 +116,25 @@ class ErrorHandler {
 }
 
 module.exports = ErrorHandler;
+
+/**
+ * Middleware global de tratamento de erros
+ */
+module.exports = (err, req, res, next) => {
+  console.error('❌ Erro na requisição:', err);
+
+  // Se o erro tiver um status definido (ex: 400, 401), usa ele. Senão, vai de 500.
+  const status = err.statusCode || 500;
+  
+  const response = {
+    erro: true,
+    mensagem: err.message || 'Erro interno do servidor',
+  };
+
+  // Em desenvolvimento, mostra o stack trace para ajudar no debug
+  if (process.env.NODE_ENV !== 'production') {
+    response.stack = err.stack;
+  }
+
+  res.status(status).json(response);
+};
