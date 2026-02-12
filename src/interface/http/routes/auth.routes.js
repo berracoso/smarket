@@ -1,19 +1,16 @@
-const { Router } = require('express');
+const express = require('express');
+const router = express.Router();
+const container = require('../../../infrastructure/config/container');
 
-module.exports = ({ authController, authenticationMiddleware }) => {
-  const router = Router();
+// Extrai as instâncias prontas do container
+const { authController, authenticationMiddleware } = container;
 
-  router.post('/registro', (req, res, next) => authController.registro(req, res, next));
-  router.post('/login', (req, res, next) => authController.login(req, res, next));
-  
-  // Rota de Logout (opcional em JWT, mas mantemos para compatibilidade)
-  router.post('/logout', (req, res) => {
-      res.status(200).json({ mensagem: 'Logout realizado com sucesso' });
-  });
+// Rotas Públicas
+router.post('/register', (req, res, next) => authController.register(req, res, next));
+router.post('/login', (req, res, next) => authController.login(req, res, next));
+router.post('/logout', (req, res, next) => authController.logout(req, res, next));
 
-  // Rota protegida para pegar dados do usuário logado
-  // O uso de .requireAuth() agora funcionará porque adicionamos o método na classe acima
-  router.get('/me', authenticationMiddleware.requireAuth(), (req, res, next) => authController.me(req, res, next));
+// Rotas Privadas (Usa o .requireAuth do middleware)
+router.get('/me', authenticationMiddleware.requireAuth, (req, res, next) => authController.me(req, res, next));
 
-  return router;
-};
+module.exports = router;

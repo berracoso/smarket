@@ -1,43 +1,16 @@
-/**
- * Rotas de Usuários
- * Gerenciamento de usuários (apenas Admin/Super Admin)
- */
-
 const express = require('express');
+const router = express.Router();
+const container = require('../../../infrastructure/config/container');
 
-module.exports = (usersController, authMiddleware, authorizationMiddleware) => {
-    const router = express.Router();
+const { usersController, authenticationMiddleware } = container;
 
-    /**
-     * Todas as rotas requerem Autenticação + Admin/SuperAdmin
-     */
-    router.use(authMiddleware.requireAuth());
-    router.use(authorizationMiddleware.requireAdmin());
+// Protege todas as rotas
+router.use(authenticationMiddleware.requireAuth);
 
-    /**
-     * GET /usuarios
-     * Lista todos os usuários
-     */
-    router.get('/', (req, res, next) => {
-        usersController.listar(req, res, next);
-    });
+// Só define a rota se o controller existir
+if (usersController) {
+    router.get('/', (req, res, next) => usersController.listar(req, res, next));
+    // Adicione outras rotas de usuário aqui (ex: promover, rebaixar)
+}
 
-    /**
-     * POST /usuarios/:id/promover
-     * Promove usuário a Admin (apenas Super Admin pode promover?)
-     * Por enquanto deixamos Admin também promover, conforme regra antiga
-     */
-    router.post('/:id/promover', (req, res, next) => {
-        usersController.promover(req, res, next);
-    });
-
-    /**
-     * POST /usuarios/:id/rebaixar
-     * Rebaixa Admin a Usuário
-     */
-    router.post('/:id/rebaixar', (req, res, next) => {
-        usersController.rebaixar(req, res, next);
-    });
-
-    return router;
-};
+module.exports = router;

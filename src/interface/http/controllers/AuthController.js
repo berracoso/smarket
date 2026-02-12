@@ -1,102 +1,59 @@
 class AuthController {
-  constructor(registrarUsuario, fazerLogin, sessionManager) {
-    this.registrarUsuario = registrarUsuario;
-    this.fazerLogin = fazerLogin;
-    this.sessionManager = sessionManager; 
-  }
-
-  async registro(req, res, next) {
-    try {
-      const { nome, email, senha } = req.body;
-      
-      // Validação básica de entrada
-      if (!nome || !email || !senha) {
-          return res.status(400).json({ erro: 'Todos os campos são obrigatórios.' });
-      }
-
-      const resultado = await this.registrarUsuario.executar({ nome, email, senha });
-      
-      // Robustez: Garante que pegamos o objeto usuário corretamente
-      const usuario = resultado.usuario || resultado;
-
-      if (!usuario || !usuario.id) {
-          throw new Error('Falha ao registrar usuário: Retorno inválido do caso de uso.');
-      }
-
-      const token = this.sessionManager.criarSessao(usuario);
-
-      res.status(201).json({
-        mensagem: 'Usuário registrado com sucesso',
-        usuario: {
-          id: usuario.id,
-          nome: usuario.nome,
-          email: usuario.email.endereco || usuario.email, // Suporta VO ou string
-          tipo: usuario.tipo,
-          isAdmin: usuario.isAdmin
-        },
-        token
-      });
-    } catch (erro) {
-      // Passa para o error-handler global
-      next(erro);
+    constructor(fazerLogin, registrarUsuario) {
+        this.fazerLogin = fazerLogin;
+        this.registrarUsuario = registrarUsuario;
     }
-  }
 
-  async login(req, res, next) {
-    try {
-      const { email, senha } = req.body;
+    async login(req, res, next) {
+        try {
+            const { email, senha } = req.body;
+            const resultado = await this.fazerLogin.executar({ email, senha });
+            
+            // Salva na sessão do Postgres (connect-pg-simple)
+            req.session.user = {
+                id: resultado.usuario.id,
+                nome: resultado.usuario.nome,
+                email: resultado.usuario.email.endereco,
+                tipo: resultado.usuario.tipo,
+                isAdmin: resultado.usuario.isAdmin,
+                isSuperAdmin: resultado.usuario.isSuperAdmin
+            };
 
-      if (!email || !senha) {
-          return res.status(400).json({ erro: 'Email e senha são obrigatórios.' });
-      }
+            // Salva explicitamente para garantir que o cookie seja enviado
+            req.session.save((err) => {
+                if (err) return next(err);
+                return res.json({ success: true, user: req.session.user });
+            });
 
-      const resultado = await this.fazerLogin.executar({ email, senha });
-      
-      // O UseCase FazerLogin retorna { sucesso: true, usuario: ... }
-      const usuario = resultado.usuario;
-
-      const token = this.sessionManager.criarSessao(usuario);
-
-      res.status(200).json({
-        mensagem: 'Login realizado com sucesso',
-        usuario: {
-          id: usuario.id,
-          nome: usuario.nome,
-          email: usuario.email.endereco || usuario.email,
-          tipo: usuario.tipo,
-          isAdmin: usuario.isAdmin
-        },
-        token
-      });
-    } catch (erro) {
-      // Se for erro de credenciais, retornamos 401 explicitamente se o erro não tiver status
-      if (erro.message === 'Credenciais inválidas') {
-          return res.status(401).json({ erro: 'Email ou senha incorretos.' });
-      }
-      next(erro);
+        } catch (error) {
+            next(error);
+        }
     }
-  }
 
-  async me(req, res, next) {
-    try {
-      // req.usuario é populado pelo AuthenticationMiddleware via Token
-      const usuario = req.usuario;
-      
-      if (!usuario) {
-        return res.status(401).json({ erro: 'Token inválido ou não fornecido.' });
-      }
-
-      res.status(200).json({
-        id: usuario.id,
-        nome: usuario.nome,
-        email: usuario.email,
-        tipo: usuario.tipo,
-        isAdmin: usuario.isAdmin
-      });
-    } catch (erro) {
-      next(erro);
+    async register(req, res, next) {
+        try {
+            const { nome, email, senha } = req.body;
+            await this.registrarUsuario.executar({ nome, email, senha });
+            res.status(201).json({ success: true, message: 'Usuário registrado com sucesso' });
+        } catch (error) {
+            next(error);
+        }
     }
-  }
+
+    async logout(req, res, next) {
+        req.session.destroy((err) => {
+            if (err) return next(err);
+            res.clearCookie('connect.sid'); // Nome padrão do cookie de sessão
+            return res.json({ success: true, message: 'Logout realizado' });
+        });
+    }
+
+    async me(req, res, next) {
+        if (!req.user) {
+            return res.status(401).json({ error: 'Não autenticado' });
+        }
+        res.json(req.user);
+    }
 }
 
 module.exports = AuthController;

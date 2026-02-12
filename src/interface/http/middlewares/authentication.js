@@ -1,75 +1,34 @@
-const jwt = require('jsonwebtoken');
-
 class AuthenticationMiddleware {
-    constructor(sessionManager) {
-        this.sessionManager = sessionManager;
+    constructor(usuarioRepository) {
+        this.usuarioRepository = usuarioRepository;
     }
 
-    // Lógica interna de verificação estrita
-    async handle(req, res, next) {
-        try {
-            const authHeader = req.headers.authorization;
-
-            if (!authHeader) {
-                return res.status(401).json({ erro: 'Token não fornecido' });
-            }
-
-            const parts = authHeader.split(' ');
-            if (parts.length !== 2 || !/^Bearer$/i.test(parts[0])) {
-                return res.status(401).json({ erro: 'Token malformatado' });
-            }
-
-            const token = parts[1];
-            const secret = process.env.JWT_SECRET || process.env.SESSION_SECRET;
-
-            if (!secret) {
-                console.error('CRÍTICO: JWT_SECRET não definido.');
-                return res.status(500).json({ erro: 'Erro interno de configuração' });
-            }
-
-            const decoded = jwt.verify(token, secret);
-            
-            req.usuario = decoded; 
-            req.userId = decoded.id;
-
+    // Usamos arrow function para não perder o 'this'
+    requireAuth = async (req, res, next) => {
+        // 1. Verifica se existe sessão ativa (criada pelo connect-pg-simple)
+        if (req.session && req.session.user) {
+            // Sessão válida! Passa o usuário para o request
+            req.user = req.session.user;
             return next();
-        } catch (err) {
-            console.warn('Falha de autenticação:', err.message);
-            return res.status(401).json({ erro: 'Token inválido ou expirado' });
         }
-    }
 
-    // Método obrigatório (Bloqueia se não tiver token)
-    requireAuth() {
-        return (req, res, next) => this.handle(req, res, next);
-    }
+        // 2. Se não tiver sessão, retorna erro 401
+        // Se a requisição espera JSON (API)
+        if (req.xhr || req.headers.accept.indexOf('json') > -1) {
+            return res.status(401).json({ error: 'Não autorizado. Faça login.' });
+        }
 
-    // Método opcional (Não bloqueia, apenas identifica se possível)
-    optionalAuth() {
-        return (req, res, next) => {
-            const authHeader = req.headers.authorization;
-
-            // Se não tem token, segue como visitante
-            if (!authHeader) return next();
-
-            const parts = authHeader.split(' ');
-            if (parts.length !== 2) return next();
-
-            const token = parts[1];
-            const secret = process.env.JWT_SECRET || process.env.SESSION_SECRET;
-
-            try {
-                const decoded = jwt.verify(token, secret);
-                req.usuario = decoded;
-                req.userId = decoded.id;
-            } catch (err) {
-                // Se o token for inválido, apenas ignoramos e seguimos como visitante
-                // não retornamos erro 401 aqui para não bloquear a Home
-            }
-            
-            return next();
-        };
-    }
+        // Se for acesso direto via navegador, redireciona para login
+        return res.redirect('/login');
+    };
+    
+    // Opcional: Middleware para apenas injetar usuário se existir, sem bloquear
+    tryAuth = (req, res, next) => {
+        if (req.session && req.session.user) {
+            req.user = req.session.user;
+        }
+        next();
+    };
 }
 
 module.exports = AuthenticationMiddleware;

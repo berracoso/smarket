@@ -1,99 +1,80 @@
 // src/infrastructure/config/container.js
 
-// Repositories
+// 1. Database & Config
+const database = require('../database/postgres');
+const BcryptHasher = require('../security/BcryptHasher');
+const SessionManager = require('../security/SessionManager');
+
+// 2. Repositories
 const PostgresUsuarioRepository = require('../repositories/PostgresUsuarioRepository');
 const PostgresEventoRepository = require('../repositories/PostgresEventoRepository');
 const PostgresApostaRepository = require('../repositories/PostgresApostaRepository');
 
-// Database (IMPORTANTE: Importar a conexão com o banco)
-const database = require('../database/postgres');
-
-// Security / Services
-const BcryptHasher = require('../security/BcryptHasher');
-const SessionManager = require('../security/SessionManager');
-
-// Middlewares
+// 3. Middlewares (Classes)
 const AuthenticationMiddleware = require('../../interface/http/middlewares/authentication');
 const AuthorizationMiddleware = require('../../interface/http/middlewares/authorization');
 
-// Use Cases - Autenticação
+// 4. Use Cases
 const RegistrarUsuario = require('../../application/use-cases/autenticacao/RegistrarUsuario');
 const FazerLogin = require('../../application/use-cases/autenticacao/FazerLogin');
-
-// Use Cases - Eventos
 const ObterEventoAtivo = require('../../application/use-cases/eventos/ObterEventoAtivo');
 const CriarNovoEvento = require('../../application/use-cases/eventos/CriarNovoEvento');
 const AbrirFecharApostas = require('../../application/use-cases/eventos/AbrirFecharApostas');
 const DefinirVencedor = require('../../application/use-cases/eventos/DefinirVencedor');
-const ResetarEvento = require('../../application/use-cases/eventos/ResetarEvento');
-
-// Use Cases - Apostas
 const CriarAposta = require('../../application/use-cases/apostas/CriarAposta');
 const ListarMinhasApostas = require('../../application/use-cases/apostas/ListarMinhasApostas');
-const ObterHistoricoApostas = require('../../application/use-cases/apostas/ObterHistoricoApostas');
-const CalcularRetornoEstimado = require('../../application/use-cases/apostas/CalcularRetornoEstimado');
 
-// --- INSTANCIAÇÃO (Singleton) ---
+// 5. Controllers (IMPORTANTE: Faltava isso no seu original)
+const AuthController = require('../../interface/http/controllers/AuthController');
+const EventosController = require('../../interface/http/controllers/EventosController');
+const ApostasController = require('../../interface/http/controllers/ApostasController');
+const UsersController = require('../../interface/http/controllers/UsersController');
 
-// 1. Infraestrutura
+// --- INSTANCIAÇÃO ---
+
+// Infra
 const hasher = new BcryptHasher();
 const sessionManager = new SessionManager(); 
 
-// 2. Repositórios (CORREÇÃO: Injetando o banco de dados)
+// Repositories
 const usuarioRepository = new PostgresUsuarioRepository(database);
 const eventoRepository = new PostgresEventoRepository(database);
 const apostaRepository = new PostgresApostaRepository(database);
 
-// 3. Middlewares
-const authenticationMiddleware = new AuthenticationMiddleware(sessionManager);
+// Middlewares
+// (Atenção: Passamos o sessionManager ou repositório se necessário)
+const authenticationMiddleware = new AuthenticationMiddleware(usuarioRepository);
 const authorizationMiddleware = new AuthorizationMiddleware(usuarioRepository);
 
-// 4. Casos de Uso
-
-// Auth
+// Use Cases
 const registrarUsuario = new RegistrarUsuario(usuarioRepository, hasher);
 const fazerLogin = new FazerLogin(usuarioRepository, hasher);
-
-// Eventos
 const obterEventoAtivo = new ObterEventoAtivo(eventoRepository, apostaRepository);
 const criarNovoEvento = new CriarNovoEvento(eventoRepository);
 const abrirFecharApostas = new AbrirFecharApostas(eventoRepository);
 const definirVencedor = new DefinirVencedor(eventoRepository, apostaRepository, usuarioRepository);
-const resetarEvento = new ResetarEvento(eventoRepository);
-
-// Apostas
 const criarAposta = new CriarAposta(apostaRepository, eventoRepository, usuarioRepository);
 const listarMinhasApostas = new ListarMinhasApostas(apostaRepository);
-const obterHistoricoApostas = new ObterHistoricoApostas(apostaRepository);
-const calcularRetornoEstimado = new CalcularRetornoEstimado(eventoRepository);
+
+// Controllers
+const authController = new AuthController(fazerLogin, registrarUsuario);
+const eventosController = new EventosController(obterEventoAtivo, criarNovoEvento, abrirFecharApostas, definirVencedor);
+const apostasController = new ApostasController(criarAposta, listarMinhasApostas);
+// UsersController geralmente precisa apenas do repositório ou de casos de uso de listagem
+const usersController = new UsersController(usuarioRepository); 
 
 module.exports = {
   // Infra
+  database,
   hasher,
-  sessionManager, 
-  database, // Exportando banco caso precise em testes
 
   // Middlewares
   authenticationMiddleware,
   authorizationMiddleware,
 
-  // Repos
-  usuarioRepository,
-  eventoRepository,
-  apostaRepository,
-
-  // Use Cases
-  registrarUsuario,
-  fazerLogin,
-  
-  obterEventoAtivo,
-  criarNovoEvento,
-  abrirFecharApostas,
-  definirVencedor,
-  resetarEvento,
-
-  criarAposta,
-  listarMinhasApostas,
-  obterHistoricoApostas,
-  calcularRetornoEstimado
+  // Controllers (As rotas usam ISSO)
+  authController,
+  eventosController,
+  apostasController,
+  usersController
 };
