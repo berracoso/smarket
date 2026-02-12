@@ -12,19 +12,15 @@ function mostrarAlerta(mensagem, tipo = 'success') {
 
 // Trocar entre tabs
 function switchTab(tab, clickedElement) {
-    // Atualizar tabs
     document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
     clickedElement.classList.add('active');
 
-    // Atualizar forms
     document.querySelectorAll('.form-container').forEach(f => f.classList.remove('active'));
     if (tab === 'login') {
         document.getElementById('loginForm').classList.add('active');
     } else {
         document.getElementById('registroForm').classList.add('active');
     }
-
-    // Limpar alerta
     document.getElementById('alertContainer').innerHTML = '';
 }
 
@@ -51,8 +47,6 @@ async function handleLogin(event) {
 
         if (response.ok) {
             mostrarAlerta(`✅ Bem-vindo, ${data.usuario.nome}!`, 'success');
-
-            // Redirecionar após 1 segundo
             setTimeout(() => {
                 if (data.usuario.isAdmin) {
                     window.location.href = '/admin';
@@ -61,7 +55,9 @@ async function handleLogin(event) {
                 }
             }, 1000);
         } else {
-            mostrarAlerta(data.erro || 'Erro ao fazer login', 'error');
+            // CORREÇÃO: Tenta ler data.mensagem primeiro, depois data.erro (se for string)
+            const msgErro = data.mensagem || (typeof data.erro === 'string' ? data.erro : 'Erro ao fazer login');
+            mostrarAlerta(msgErro, 'error');
             btnLogin.disabled = false;
             btnLogin.textContent = 'Entrar';
         }
@@ -96,13 +92,13 @@ async function handleRegistro(event) {
 
         if (response.ok) {
             mostrarAlerta(`✅ Conta criada! Bem-vindo, ${data.usuario.nome}!`, 'success');
-
-            // Redirecionar após 1 segundo
             setTimeout(() => {
                 window.location.href = '/';
             }, 1000);
         } else {
-            mostrarAlerta(data.erro || 'Erro ao criar conta', 'error');
+            // CORREÇÃO: Tenta ler data.mensagem primeiro
+            const msgErro = data.mensagem || (typeof data.erro === 'string' ? data.erro : 'Erro ao criar conta');
+            mostrarAlerta(msgErro, 'error');
             btnRegistro.disabled = false;
             btnRegistro.textContent = 'Criar Conta';
         }
@@ -122,7 +118,6 @@ async function verificarSessao() {
 
         if (response.ok) {
             const data = await response.json();
-            // Já está logado, redirecionar
             if (data.usuario.isAdmin) {
                 window.location.href = '/admin';
             } else {
@@ -130,13 +125,11 @@ async function verificarSessao() {
             }
         }
     } catch (error) {
-        // Não está logado, continuar na página
+        // Não faz nada, usuário fica na tela de login
     }
 }
 
-// Inicializar quando DOM estiver pronto
 document.addEventListener('DOMContentLoaded', () => {
-    // Adicionar event listeners para tabs
     const tabs = document.querySelectorAll('.tab');
     tabs.forEach(tab => {
         tab.addEventListener('click', (e) => {
@@ -145,19 +138,11 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    // Adicionar event listener para formulário de login
     const loginFormElement = document.querySelector('#loginForm form');
-    if (loginFormElement) {
-        loginFormElement.addEventListener('submit', handleLogin);
-    }
+    if (loginFormElement) loginFormElement.addEventListener('submit', handleLogin);
 
-    // Adicionar event listener para formulário de registro
     const registroFormElement = document.querySelector('#registroForm form');
-    if (registroFormElement) {
-        registroFormElement.addEventListener('submit', handleRegistro);
-    }
+    if (registroFormElement) registroFormElement.addEventListener('submit', handleRegistro);
 
-    // Verificar sessão ao carregar
     verificarSessao();
 });
-
