@@ -10,7 +10,6 @@
 </head>
 
 <body>
-    <!-- Sidebar -->
     <div class="sidebar">
         <div class="sidebar-header">
             <h2>📊 Menu</h2>
@@ -37,15 +36,12 @@
         </div>
     </div>
 
-    <!-- Barra Superior Fixa -->
     <div class="top-bar">
         <span class="user-name" id="userName">👤 Carregando...</span>
         <button class="btn-logout">🚪 Sair</button>
     </div>
 
-    <!-- Main Content -->
     <div class="main-content">
-        <!-- Seção: Fazer Apostas -->
         <div class="section-content active" id="secaoApostas">
             <div class="container">
                 <div class="header">
@@ -55,7 +51,6 @@
 
                 <div id="alertContainer"></div>
 
-                <!-- Alerta para Super Admin -->
                 <div id="superAdminAlert" style="display: none;">
                     <div class="alert alert-info">
                         ℹ️ <strong>Conta de Gestão:</strong> Como Super Administrador, você não pode realizar apostas.
@@ -95,7 +90,6 @@
             </div>
         </div>
 
-        <!-- Seção: Minhas Apostas -->
         <div class="section-content" id="secaoMinhasApostas">
             <div class="container">
                 <div class="header">
@@ -103,7 +97,6 @@
                     <p>Acompanhe todas as suas apostas e retornos estimados</p>
                 </div>
 
-                <!-- Alerta para Super Admin -->
                 <div id="superAdminAlertMinhas" style="display: none;">
                     <div class="card">
                         <div class="alert alert-info">
@@ -121,7 +114,6 @@
             </div>
         </div>
 
-        <!-- Seção: Conta -->
         <div class="section-content" id="secaoConta">
             <div class="container">
                 <div class="header">
@@ -138,7 +130,6 @@
             </div>
         </div>
 
-        <!-- Seção: Histórico -->
         <div class="section-content" id="secaoHistorico">
             <div class="container">
                 <div class="header">
@@ -146,7 +137,6 @@
                     <p>Todas as suas apostas passadas e estatísticas</p>
                 </div>
 
-                <!-- Estatísticas Gerais -->
                 <div class="card">
                     <h3>📊 Estatísticas Gerais</h3>
                     <div id="estatisticasContainer" class="stats-grid">
@@ -154,7 +144,6 @@
                     </div>
                 </div>
 
-                <!-- Filtros -->
                 <div class="card">
                     <h3>🔍 Filtros</h3>
                     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
@@ -180,7 +169,6 @@
                     </div>
                 </div>
 
-                <!-- Lista de Apostas -->
                 <div class="card">
                     <h3>📋 Minhas Apostas Históricas</h3>
                     <div id="historicoContainer">
@@ -188,7 +176,6 @@
                     </div>
                 </div>
 
-                <!-- Paginação -->
                 <div id="paginacaoContainer"
                     style="display: flex; justify-content: center; gap: 10px; margin-top: 20px;">
                 </div>
@@ -196,14 +183,11 @@
         </div>
     </div>
 
-    <!-- JavaScript da página -->
-    <script src="js/app.js"></script>
+    <script src="permission-interceptor.js"></script>
 
-    <!-- Sistema de Flash Messages -->
     <script src="flash-message.js"></script>
 
-    <!-- Interceptor de Requisições com Validação de Permissões -->
-    <script src="permission-interceptor.js"></script>
+    <script src="js/app.js"></script>
 </body>
 
 </html>
