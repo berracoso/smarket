@@ -1,55 +1,44 @@
 const { Router } = require('express');
-const EventosController = require('../controllers/EventosController');
 
-// Importando dependências do container
-const {
-    obterEventoAtivo,
-    criarNovoEvento,
-    abrirFecharApostas,
-    definirVencedor,
-    resetarEvento,
-    authenticationMiddleware,
-    authorizationMiddleware
-} = require('../../../infrastructure/config/container');
+module.exports = ({ eventosController, authenticationMiddleware, authorizationMiddleware }) => {
+  const router = Router();
 
-const router = Router();
+  // Rota Pública (mas com suporte a usuário logado se houver token)
+  // Isso permite que o frontend saiba se o usuário já apostou neste evento, por exemplo
+  router.get('/ativo', 
+      authenticationMiddleware.optionalAuth(), 
+      (req, res, next) => eventosController.obterAtivo(req, res, next)
+  );
 
-// Instanciando controller
-const eventosController = new EventosController(
-    obterEventoAtivo,
-    criarNovoEvento,
-    abrirFecharApostas,
-    definirVencedor,
-    resetarEvento
-);
+  // Rotas Protegidas (Apenas Admin)
+  router.post('/', 
+      authenticationMiddleware.requireAuth(), 
+      authorizationMiddleware.isAdmin(), 
+      (req, res, next) => eventosController.criar(req, res, next)
+  );
 
-// Rotas Públicas (ou com auth opcional)
-router.get('/ativo', authenticationMiddleware.optionalAuth(), (req, res, next) => {
-    eventosController.ativo(req, res, next);
-});
+  router.post('/fechar', 
+      authenticationMiddleware.requireAuth(), 
+      authorizationMiddleware.isAdmin(), 
+      (req, res, next) => eventosController.fecharApostas(req, res, next)
+  );
+  
+  router.post('/vencedor', 
+      authenticationMiddleware.requireAuth(), 
+      authorizationMiddleware.isAdmin(), 
+      (req, res, next) => eventosController.definirVencedor(req, res, next)
+  );
 
-// GET /eventos - Listar eventos (Wrapper manual para manter compatibilidade)
-router.get('/', authenticationMiddleware.optionalAuth(), async (req, res, next) => {
-    try {
-        const resultado = await obterEventoAtivo.executar();
-        if (resultado.evento) {
-            res.json({ eventos: [resultado.evento] });
-        } else {
-            res.json({ eventos: [] });
-        }
-    } catch (erro) {
-        next(erro);
-    }
-});
+  // Rota para resetar evento (Super Admin)
+  router.post('/reset', 
+      authenticationMiddleware.requireAuth(), 
+      authorizationMiddleware.isSuperAdmin(), 
+      (req, res, next) => eventosController.resetar(req, res, next)
+  );
 
-// --- Área Administrativa ---
-// Rotas abaixo requerem Autenticação E Permissão de Admin
-router.use(authenticationMiddleware.requireAuth());
-router.use(authorizationMiddleware.requireAdmin());
+  // Listagem geral (pode ser pública ou protegida, dependendo da regra de negócio)
+  // Vamos deixar pública por enquanto
+  router.get('/', (req, res, next) => eventosController.listar(req, res, next));
 
-router.post('/', (req, res, next) => eventosController.criar(req, res, next));
-router.patch('/ativo/apostas', (req, res, next) => eventosController.toggleApostas(req, res, next));
-router.post('/ativo/vencedor', (req, res, next) => eventosController.definirVencedor(req, res, next));
-router.post('/resetar', (req, res, next) => eventosController.resetar(req, res, next));
-
-module.exports = router;
+  return router;
+};
