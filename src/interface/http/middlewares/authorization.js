@@ -1,67 +1,35 @@
-/**
- * Middleware de Autorização (RBAC)
- * Verifica permissões do usuário (Admin, Super Admin)
- */
-const ValidadorPermissoes = require('../../../domain/services/ValidadorPermissoes');
-
 class AuthorizationMiddleware {
-    constructor(usuarioRepository) {
-        this.usuarioRepository = usuarioRepository;
-        this.validador = new ValidadorPermissoes();
-    }
+    // Verifica se é Admin ou Super Admin
+    isAdmin() {
+        return (req, res, next) => {
+            const usuario = req.usuario;
 
-    /**
-     * Requer Admin ou Super Admin
-     */
-    requireAdmin() {
-        return async (req, res, next) => {
-            try {
-                if (!req.userId) {
-                    return res.status(401).json({ erro: 'Não autenticado' });
-                }
-
-                // Busca dados atualizados do banco (para garantir permissão atual)
-                const usuario = await this.usuarioRepository.buscarPorId(req.userId);
-                if (!usuario) {
-                    return res.status(401).json({ erro: 'Usuário não encontrado' });
-                }
-
-                if (!this.validador.podeGerenciarEventos(usuario)) {
-                    return res.status(403).json({ erro: 'Acesso negado. Requer permissão de Admin.' });
-                }
-
-                req.usuarioFull = usuario; // Anexa usuário completo do banco
-                next();
-            } catch (erro) {
-                next(erro);
+            if (!usuario) {
+                return res.status(401).json({ erro: 'Usuário não autenticado.' });
             }
+
+            if (usuario.isAdmin || usuario.isSuperAdmin) {
+                return next();
+            }
+
+            return res.status(403).json({ erro: 'Acesso negado: Requer privilégios de administrador.' });
         };
     }
 
-    /**
-     * Permissão para apostar (Super Admin não pode)
-     */
-    canBet() {
-        return async (req, res, next) => {
-            try {
-                if (!req.userId) {
-                    return res.status(401).json({ erro: 'Não autenticado' });
-                }
+    // Verifica se é estritamente Super Admin
+    isSuperAdmin() {
+        return (req, res, next) => {
+            const usuario = req.usuario;
 
-                const usuario = await this.usuarioRepository.buscarPorId(req.userId);
-                if (!usuario) {
-                    return res.status(401).json({ erro: 'Usuário não encontrado' });
-                }
-
-                if (!this.validador.podeApostar(usuario)) {
-                    return res.status(403).json({ erro: 'Ação não permitida para este tipo de usuário.' });
-                }
-
-                req.usuarioFull = usuario;
-                next();
-            } catch (erro) {
-                next(erro);
+            if (!usuario) {
+                return res.status(401).json({ erro: 'Usuário não autenticado.' });
             }
+
+            if (usuario.isSuperAdmin) {
+                return next();
+            }
+
+            return res.status(403).json({ erro: 'Acesso negado: Requer privilégios de Super Admin.' });
         };
     }
 }
