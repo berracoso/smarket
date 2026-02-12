@@ -1,30 +1,42 @@
 const API_URL = '';
 
-// Mostrar alerta
-function mostrarAlerta(mensagem, tipo = 'success') {
-    const alertHTML = `
-        <div class="alert alert-${tipo} show">
-            ${mensagem}
-        </div>
-    `;
-    document.getElementById('alertContainer').innerHTML = alertHTML;
+// Helper para headers com autenticação
+function getAuthHeaders() {
+    const token = localStorage.getItem('token');
+    const headers = {
+        'Content-Type': 'application/json'
+    };
+    if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+    }
+    return headers;
 }
 
-// Trocar entre tabs
+function mostrarAlerta(mensagem, tipo = 'success') {
+    const container = document.getElementById('alertContainer');
+    if (container) {
+        container.innerHTML = `
+            <div class="alert alert-${tipo} show">
+                ${mensagem}
+            </div>
+        `;
+    }
+}
+
 function switchTab(tab, clickedElement) {
     document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-    clickedElement.classList.add('active');
+    if (clickedElement) clickedElement.classList.add('active');
 
     document.querySelectorAll('.form-container').forEach(f => f.classList.remove('active'));
-    if (tab === 'login') {
-        document.getElementById('loginForm').classList.add('active');
-    } else {
-        document.getElementById('registroForm').classList.add('active');
-    }
-    document.getElementById('alertContainer').innerHTML = '';
+    
+    const formId = tab === 'login' ? 'loginForm' : 'registroForm';
+    const formElement = document.getElementById(formId);
+    if (formElement) formElement.classList.add('active');
+
+    const alertContainer = document.getElementById('alertContainer');
+    if (alertContainer) alertContainer.innerHTML = '';
 }
 
-// Handle Login
 async function handleLogin(event) {
     event.preventDefault();
 
@@ -32,11 +44,12 @@ async function handleLogin(event) {
     const senha = document.getElementById('loginSenha').value;
     const btnLogin = document.getElementById('btnLogin');
 
-    btnLogin.disabled = true;
-    btnLogin.textContent = 'Entrando...';
+    if (btnLogin) {
+        btnLogin.disabled = true;
+        btnLogin.textContent = 'Entrando...';
+    }
 
     try {
-        // CORREÇÃO: Removido credentials: 'include'
         const response = await fetch(`${API_URL}/auth/login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -48,9 +61,13 @@ async function handleLogin(event) {
         if (response.ok) {
             if (data.token) {
                 localStorage.setItem('token', data.token);
+                // Salvar dados básicos do usuário também ajuda na UI
+                localStorage.setItem('usuario', JSON.stringify(data.usuario));
             }
 
             mostrarAlerta(`✅ Bem-vindo, ${data.usuario.nome}!`, 'success');
+            
+            // Pequeno delay para o usuário ler a mensagem
             setTimeout(() => {
                 if (data.usuario.isAdmin) {
                     window.location.href = '/admin';
@@ -59,20 +76,23 @@ async function handleLogin(event) {
                 }
             }, 1000);
         } else {
-            const msgErro = data.mensagem || (typeof data.erro === 'string' ? data.erro : 'Erro ao fazer login');
+            const msgErro = data.mensagem || data.erro || 'Erro ao fazer login';
             mostrarAlerta(msgErro, 'error');
-            btnLogin.disabled = false;
-            btnLogin.textContent = 'Entrar';
+            if (btnLogin) {
+                btnLogin.disabled = false;
+                btnLogin.textContent = 'Entrar';
+            }
         }
     } catch (error) {
         console.error(error);
-        mostrarAlerta('Erro ao conectar com servidor', 'error');
-        btnLogin.disabled = false;
-        btnLogin.textContent = 'Entrar';
+        mostrarAlerta('Erro de conexão com o servidor', 'error');
+        if (btnLogin) {
+            btnLogin.disabled = false;
+            btnLogin.textContent = 'Entrar';
+        }
     }
 }
 
-// Handle Registro
 async function handleRegistro(event) {
     event.preventDefault();
 
@@ -81,11 +101,12 @@ async function handleRegistro(event) {
     const senha = document.getElementById('registroSenha').value;
     const btnRegistro = document.getElementById('btnRegistro');
 
-    btnRegistro.disabled = true;
-    btnRegistro.textContent = 'Criando conta...';
+    if (btnRegistro) {
+        btnRegistro.disabled = true;
+        btnRegistro.textContent = 'Criando conta...';
+    }
 
     try {
-        // CORREÇÃO: Removido credentials: 'include'
         const response = await fetch(`${API_URL}/auth/registro`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -97,6 +118,7 @@ async function handleRegistro(event) {
         if (response.ok) {
             if (data.token) {
                 localStorage.setItem('token', data.token);
+                localStorage.setItem('usuario', JSON.stringify(data.usuario));
             }
 
             mostrarAlerta(`✅ Conta criada! Bem-vindo, ${data.usuario.nome}!`, 'success');
@@ -104,47 +126,73 @@ async function handleRegistro(event) {
                 window.location.href = '/';
             }, 1000);
         } else {
-            const msgErro = data.mensagem || (typeof data.erro === 'string' ? data.erro : 'Erro ao criar conta');
+            const msgErro = data.mensagem || data.erro || 'Erro ao criar conta';
             mostrarAlerta(msgErro, 'error');
+            if (btnRegistro) {
+                btnRegistro.disabled = false;
+                btnRegistro.textContent = 'Criar Conta';
+            }
+        }
+    } catch (error) {
+        console.error(error);
+        mostrarAlerta('Erro de conexão com o servidor', 'error');
+        if (btnRegistro) {
             btnRegistro.disabled = false;
             btnRegistro.textContent = 'Criar Conta';
         }
-    } catch (error) {
-        mostrarAlerta('Erro ao conectar com servidor', 'error');
-        btnRegistro.disabled = false;
-        btnRegistro.textContent = 'Criar Conta';
     }
 }
 
-// Verificar se já está logado
 async function verificarSessao() {
+    const token = localStorage.getItem('token');
+    
+    // Se não tem token e estamos na página de login, tudo bem.
+    // Se não tem token e estamos em rota protegida, redirecionar (lógica deve estar no script da página protegida, não aqui).
+    if (!token) return;
+
     try {
-        // CORREÇÃO: Removido credentials: 'include'
-        const response = await fetch(`${API_URL}/auth/me`);
+        // CORREÇÃO CRÍTICA: Adicionado headers com Authorization
+        const response = await fetch(`${API_URL}/auth/me`, {
+            method: 'GET',
+            headers: getAuthHeaders()
+        });
 
         if (response.ok) {
             const data = await response.json();
-            if (data.usuario.isAdmin) {
-                window.location.href = '/admin';
-            } else {
-                window.location.href = '/';
+            // Se o usuário tentar acessar login estando logado, redireciona
+            if (window.location.pathname.includes('login') || window.location.pathname === '/') {
+                 if (data.isAdmin) {
+                    window.location.href = '/admin';
+                } else {
+                    // Já está na home ou vai pra home
+                    if (window.location.pathname.includes('login')) window.location.href = '/';
+                }
             }
         } else {
+            // Token inválido ou expirado
+            console.warn('Sessão inválida, limpando dados.');
             localStorage.removeItem('token');
+            localStorage.removeItem('usuario');
+            // Só redireciona se NÃO estiver no login para evitar loop
+            if (!window.location.pathname.includes('login')) {
+                window.location.href = '/login';
+            }
         }
     } catch (error) {
-        // Não faz nada, usuário fica na tela de login
+        console.error('Erro ao verificar sessão', error);
     }
 }
 
 document.addEventListener('DOMContentLoaded', () => {
     const tabs = document.querySelectorAll('.tab');
-    tabs.forEach(tab => {
-        tab.addEventListener('click', (e) => {
-            const tabType = tab.textContent.trim().toLowerCase() === 'login' ? 'login' : 'registro';
-            switchTab(tabType, e.target);
+    if (tabs) {
+        tabs.forEach(tab => {
+            tab.addEventListener('click', (e) => {
+                const tabType = tab.textContent.trim().toLowerCase() === 'login' ? 'login' : 'registro';
+                switchTab(tabType, e.target);
+            });
         });
-    });
+    }
 
     const loginFormElement = document.querySelector('#loginForm form');
     if (loginFormElement) loginFormElement.addEventListener('submit', handleLogin);
@@ -152,5 +200,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const registroFormElement = document.querySelector('#registroForm form');
     if (registroFormElement) registroFormElement.addEventListener('submit', handleRegistro);
 
+    // Só chama verificarSessao se estivermos na página de login para auto-redirect
+    // OU se este script for compartilhado globalmente.
     verificarSessao();
 });
