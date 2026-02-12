@@ -9,7 +9,8 @@ class AuthController {
     try {
       const { nome, email, senha } = req.body;
       
-      const usuario = await this.registrarUsuario.executar({ nome, email, senha });
+      // CORREÇÃO: Desestruturação para pegar o 'usuario' de dentro do retorno
+      const { usuario } = await this.registrarUsuario.executar({ nome, email, senha });
 
       const token = this.sessionManager.criarSessao(usuario);
 
@@ -32,9 +33,9 @@ class AuthController {
     try {
       const { email, senha } = req.body;
 
-      const usuario = await this.fazerLogin.executar({ email, senha });
+      // CORREÇÃO: Desestruturação para pegar o 'usuario' de dentro do retorno
+      const { usuario } = await this.fazerLogin.executar({ email, senha });
 
-      // O erro "undefined" acontecia aqui antes
       const token = this.sessionManager.criarSessao(usuario);
 
       res.status(200).json({
