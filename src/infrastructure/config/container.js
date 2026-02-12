@@ -1,7 +1,12 @@
+// src/infrastructure/config/container.js
+
 // Repositories
 const PostgresUsuarioRepository = require('../repositories/PostgresUsuarioRepository');
 const PostgresEventoRepository = require('../repositories/PostgresEventoRepository');
 const PostgresApostaRepository = require('../repositories/PostgresApostaRepository');
+
+// Database (IMPORTANTE: Importar a conexão com o banco)
+const database = require('../database/postgres');
 
 // Security / Services
 const BcryptHasher = require('../security/BcryptHasher');
@@ -34,12 +39,12 @@ const CalcularRetornoEstimado = require('../../application/use-cases/apostas/Cal
 const hasher = new BcryptHasher();
 const sessionManager = new SessionManager(); 
 
-// 2. Repositórios
-const usuarioRepository = new PostgresUsuarioRepository();
-const eventoRepository = new PostgresEventoRepository();
-const apostaRepository = new PostgresApostaRepository();
+// 2. Repositórios (CORREÇÃO: Injetando o banco de dados)
+const usuarioRepository = new PostgresUsuarioRepository(database);
+const eventoRepository = new PostgresEventoRepository(database);
+const apostaRepository = new PostgresApostaRepository(database);
 
-// 3. Middlewares (Injetando dependências)
+// 3. Middlewares
 const authenticationMiddleware = new AuthenticationMiddleware(sessionManager);
 const authorizationMiddleware = new AuthorizationMiddleware(usuarioRepository);
 
@@ -66,6 +71,7 @@ module.exports = {
   // Infra
   hasher,
   sessionManager, 
+  database, // Exportando banco caso precise em testes
 
   // Middlewares
   authenticationMiddleware,
