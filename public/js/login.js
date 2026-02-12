@@ -46,6 +46,11 @@ async function handleLogin(event) {
         const data = await response.json();
 
         if (response.ok) {
+            // CORREÇÃO: Salvar o token no LocalStorage
+            if (data.token) {
+                localStorage.setItem('token', data.token);
+            }
+
             mostrarAlerta(`✅ Bem-vindo, ${data.usuario.nome}!`, 'success');
             setTimeout(() => {
                 if (data.usuario.isAdmin) {
@@ -55,13 +60,13 @@ async function handleLogin(event) {
                 }
             }, 1000);
         } else {
-            // CORREÇÃO: Tenta ler data.mensagem primeiro, depois data.erro (se for string)
             const msgErro = data.mensagem || (typeof data.erro === 'string' ? data.erro : 'Erro ao fazer login');
             mostrarAlerta(msgErro, 'error');
             btnLogin.disabled = false;
             btnLogin.textContent = 'Entrar';
         }
     } catch (error) {
+        console.error(error);
         mostrarAlerta('Erro ao conectar com servidor', 'error');
         btnLogin.disabled = false;
         btnLogin.textContent = 'Entrar';
@@ -91,12 +96,16 @@ async function handleRegistro(event) {
         const data = await response.json();
 
         if (response.ok) {
+            // CORREÇÃO: Salvar o token no LocalStorage ao registrar
+            if (data.token) {
+                localStorage.setItem('token', data.token);
+            }
+
             mostrarAlerta(`✅ Conta criada! Bem-vindo, ${data.usuario.nome}!`, 'success');
             setTimeout(() => {
                 window.location.href = '/';
             }, 1000);
         } else {
-            // CORREÇÃO: Tenta ler data.mensagem primeiro
             const msgErro = data.mensagem || (typeof data.erro === 'string' ? data.erro : 'Erro ao criar conta');
             mostrarAlerta(msgErro, 'error');
             btnRegistro.disabled = false;
@@ -114,6 +123,7 @@ async function verificarSessao() {
     try {
         const response = await fetch(`${API_URL}/auth/me`, {
             credentials: 'include'
+            // O interceptor cuidará do header Authorization
         });
 
         if (response.ok) {
@@ -123,6 +133,9 @@ async function verificarSessao() {
             } else {
                 window.location.href = '/';
             }
+        } else {
+            // Se falhar a verificação, limpa qualquer token inválido
+            localStorage.removeItem('token');
         }
     } catch (error) {
         // Não faz nada, usuário fica na tela de login
