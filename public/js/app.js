@@ -7,57 +7,81 @@ let paginaAtual = 1;
 // Verificar autenticação
 async function verificarAuth() {
     try {
-        // CORREÇÃO: Removido credentials: 'include' para evitar erro de CORS
-        // O token é injetado automaticamente pelo permission-interceptor.js
+        console.log('🔄 Verificando autenticação...');
         const response = await fetch(`${API_URL}/auth/me`);
+
+        // Verifica se a resposta é JSON
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+            // Se não for JSON (ex: HTML de erro 500 ou 404), lança erro para debug
+            const text = await response.text();
+            console.error('⚠️ Resposta não-JSON recebida de /auth/me:', text.substring(0, 200)); // Loga os primeiros 200 chars
+            
+            // Se for 401/403 mas retornou HTML, forçamos logout
+            if (response.status === 401 || response.status === 403) {
+                window.location.href = '/login';
+                return;
+            }
+            throw new Error(`Servidor respondeu com formato inválido (${response.status})`);
+        }
 
         if (response.ok) {
             const data = await response.json();
             usuarioAtual = data.usuario;
+            console.log('✅ Usuário autenticado:', usuarioAtual.nome);
 
-            // Elementos que precisam ser controlados por permissão
-            const menuAdmin = document.getElementById('menuAdmin');
-            const apostaCard = document.getElementById('apostaCard');
-            const superAdminAlert = document.getElementById('superAdminAlert');
-            const superAdminAlertMinhas = document.getElementById('superAdminAlertMinhas');
-            const userName = document.getElementById('userName');
-
-            // Resetar estado inicial
-            if (menuAdmin) menuAdmin.style.display = 'none';
-            if (superAdminAlert) superAdminAlert.style.display = 'none';
-            if (superAdminAlertMinhas) superAdminAlertMinhas.style.display = 'none';
-            if (apostaCard) apostaCard.style.display = 'block';
-
-            // Configuração de visualização baseada no nível de acesso
-            if (usuarioAtual.isAdmin === true) {
-                if (menuAdmin) menuAdmin.style.display = 'flex';
-            }
-
-            if (usuarioAtual.isSuperAdmin === true) {
-                if (apostaCard) apostaCard.style.display = 'none';
-                if (superAdminAlert) superAdminAlert.style.display = 'block';
-                if (superAdminAlertMinhas) superAdminAlertMinhas.style.display = 'block';
-                if (userName) userName.innerHTML = `👤 ${usuarioAtual.nome} <span style="background: #dc2626; color: white; padding: 2px 8px; border-radius: 10px; font-size: 0.8em; margin-left: 5px;">SUPER ADMIN</span>`;
-            } else if (usuarioAtual.isAdmin === true) {
-                if (userName) userName.innerHTML = `👤 ${usuarioAtual.nome} <span style="background: #fbbf24; color: #78350f; padding: 2px 8px; border-radius: 10px; font-size: 0.8em; margin-left: 5px;">ADMIN</span>`;
-            } else {
-                if (userName) userName.innerHTML = `👤 ${usuarioAtual.nome}`;
-            }
-
+            atualizarInterfaceUsuario();
             carregarConta();
         } else {
-            // Se o servidor retornar 401, o interceptor já lida, mas garantimos aqui
+            // Se o servidor retornar JSON de erro (ex: 401 token expirado)
             if (response.status === 401 || response.status === 403) {
-                console.warn('Falha na autenticação, redirecionando...');
+                console.warn('🔒 Sessão inválida, redirecionando para login...');
                 window.location.href = '/login';
+            } else {
+                console.warn('⚠️ Erro na resposta da auth:', response.status);
             }
         }
     } catch (error) {
-        console.error('Erro de conexão ao verificar auth:', error);
-        // CORREÇÃO: Não redirecionar imediatamente em erro de rede genérico,
-        // pois pode ser apenas servidor offline momentaneamente.
-        // O usuário verá o estado "Carregando..." ou podemos mostrar um alerta.
-        mostrarAlerta('Erro de conexão com o servidor.', 'error');
+        console.error('❌ Erro crítico na autenticação:', error);
+        // Não mostra alerta intrusivo para erro de auth, apenas loga e deixa o usuario como "visitante" ou redireciona se necessario
+        // Se quiser forçar login em caso de erro: window.location.href = '/login';
+        
+        const userName = document.getElementById('userName');
+        if (userName) userName.innerHTML = '⚠️ Erro de Conexão';
+    }
+}
+
+// Função auxiliar para atualizar a UI baseada no usuário
+function atualizarInterfaceUsuario() {
+    const menuAdmin = document.getElementById('menuAdmin');
+    const apostaCard = document.getElementById('apostaCard');
+    const superAdminAlert = document.getElementById('superAdminAlert');
+    const superAdminAlertMinhas = document.getElementById('superAdminAlertMinhas');
+    const userName = document.getElementById('userName');
+
+    // Resetar
+    if (menuAdmin) menuAdmin.style.display = 'none';
+    if (superAdminAlert) superAdminAlert.style.display = 'none';
+    if (superAdminAlertMinhas) superAdminAlertMinhas.style.display = 'none';
+    if (apostaCard) apostaCard.style.display = 'block';
+
+    if (!usuarioAtual) return;
+
+    // Lógica de Admin
+    if (usuarioAtual.isAdmin === true) {
+        if (menuAdmin) menuAdmin.style.display = 'flex';
+    }
+
+    // Lógica de Super Admin
+    if (usuarioAtual.isSuperAdmin === true) {
+        if (apostaCard) apostaCard.style.display = 'none';
+        if (superAdminAlert) superAdminAlert.style.display = 'block';
+        if (superAdminAlertMinhas) superAdminAlertMinhas.style.display = 'block';
+        if (userName) userName.innerHTML = `👤 ${usuarioAtual.nome} <span style="background: #dc2626; color: white; padding: 2px 8px; border-radius: 10px; font-size: 0.8em; margin-left: 5px;">SUPER ADMIN</span>`;
+    } else if (usuarioAtual.isAdmin === true) {
+        if (userName) userName.innerHTML = `👤 ${usuarioAtual.nome} <span style="background: #fbbf24; color: #78350f; padding: 2px 8px; border-radius: 10px; font-size: 0.8em; margin-left: 5px;">ADMIN</span>`;
+    } else {
+        if (userName) userName.innerHTML = `👤 ${usuarioAtual.nome}`;
     }
 }
 
@@ -88,8 +112,13 @@ function mostrarSecao(secao) {
 // Carregar minhas apostas
 async function carregarMinhasApostas() {
     try {
-        // CORREÇÃO: Removido credentials: 'include'
         const response = await fetch(`${API_URL}/minhas-apostas`);
+
+        // Validação de JSON
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+            throw new Error('Resposta inválida do servidor');
+        }
 
         if (response.ok) {
             const data = await response.json();
@@ -136,6 +165,7 @@ async function carregarMinhasApostas() {
             document.getElementById('minhasApostasContainer').innerHTML = '<p style="color: #ef4444; text-align: center;">Erro ao carregar apostas</p>';
         }
     } catch (error) {
+        console.error(error);
         document.getElementById('minhasApostasContainer').innerHTML = '<p style="color: #ef4444; text-align: center;">Erro ao conectar com servidor</p>';
     }
 }
@@ -204,15 +234,10 @@ function carregarConta() {
 // Logout
 async function logout() {
     try {
-        // Remove token localmente primeiro para evitar race condition
         localStorage.removeItem('token');
-        
-        // Tenta avisar o servidor (opcional com JWT stateless, mas boa prática)
-        await fetch(`${API_URL}/auth/logout`, {
-            method: 'POST'
-        });
+        await fetch(`${API_URL}/auth/logout`, { method: 'POST' });
     } catch (error) {
-        console.error('Erro no logout', error);
+        console.error('Erro logout', error);
     } finally {
         window.location.href = '/login';
     }
@@ -221,13 +246,14 @@ async function logout() {
 // Carregar resumo inicial
 async function carregarResumo() {
     try {
-        // CORREÇÃO: Removido credentials: 'include'
         const response = await fetch(`${API_URL}/resumo`);
         
-        if (!response.ok) return; // Se der erro, apenas ignora para não floodar alertas
-        
-        resumoAtual = await response.json();
-        atualizarInterface();
+        // Proteção contra resposta HTML
+        const contentType = response.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+            resumoAtual = await response.json();
+            atualizarInterface();
+        }
     } catch (error) {
         console.error('Erro ao carregar resumo', error);
     }
@@ -235,89 +261,101 @@ async function carregarResumo() {
 
 // Atualizar interface com dados do resumo
 function atualizarInterface() {
+    if(!resumoAtual) return;
+
     const temTimes = resumoAtual.times && Object.keys(resumoAtual.times).length > 0;
 
     // Status
-    const statusHTML = temTimes
-        ? `<span class="status-badge ${resumoAtual.aberto ? 'status-aberto' : 'status-fechado'}">
-            ${resumoAtual.aberto ? '✅ Apostas Abertas' : '🔒 Apostas Fechadas'}
-           </span>`
-        : `<span class="status-badge status-fechado">⚠️ Nenhum Evento Ativo</span>`;
-    document.getElementById('statusContainer').innerHTML = statusHTML;
+    const statusContainer = document.getElementById('statusContainer');
+    if(statusContainer) {
+        const statusHTML = temTimes
+            ? `<span class="status-badge ${resumoAtual.aberto ? 'status-aberto' : 'status-fechado'}">
+                ${resumoAtual.aberto ? '✅ Apostas Abertas' : '🔒 Apostas Fechadas'}
+            </span>`
+            : `<span class="status-badge status-fechado">⚠️ Nenhum Evento Ativo</span>`;
+        statusContainer.innerHTML = statusHTML;
+    }
 
     // Vencedor
-    if (resumoAtual.vencedor) {
-        const vencedorHTML = `
-            <div class="alert alert-info">
-                🏆 <strong>Vencedor:</strong> ${resumoAtual.vencedor}
-            </div>
-        `;
-        document.getElementById('vencedorContainer').innerHTML = vencedorHTML;
-    } else {
-        document.getElementById('vencedorContainer').innerHTML = '';
+    const vencedorContainer = document.getElementById('vencedorContainer');
+    if(vencedorContainer) {
+        if (resumoAtual.vencedor) {
+            vencedorContainer.innerHTML = `
+                <div class="alert alert-info">
+                    🏆 <strong>Vencedor:</strong> ${resumoAtual.vencedor}
+                </div>
+            `;
+        } else {
+            vencedorContainer.innerHTML = '';
+        }
     }
 
     // Times
-    let timesHTML = '';
-    if (temTimes) {
-        timesHTML = Object.keys(resumoAtual.times).map(time => {
-            const dados = resumoAtual.times[time];
-            const selected = timeSelecionado === time ? 'selected' : '';
-            return `
-                <div class="time-option ${selected}" data-time="${time}">
-                    <div class="time-name">${time}</div>
-                    <div class="time-prob">${dados.percentual}%</div>
+    const timesGrid = document.getElementById('timesGrid');
+    if(timesGrid) {
+        let timesHTML = '';
+        if (temTimes) {
+            timesHTML = Object.keys(resumoAtual.times).map(time => {
+                const dados = resumoAtual.times[time];
+                const selected = timeSelecionado === time ? 'selected' : '';
+                return `
+                    <div class="time-option ${selected}" data-time="${time}">
+                        <div class="time-name">${time}</div>
+                        <div class="time-prob">${dados.percentual}%</div>
+                    </div>
+                `;
+            }).join('');
+        } else {
+            timesHTML = `
+                <div class="empty-state" style="grid-column: 1 / -1;">
+                    <div>📭</div>
+                    <div>Nenhum evento ativo no momento</div>
+                    <p style="font-size: 0.9em; margin-top: 5px;">Aguarde a abertura de um novo evento</p>
                 </div>
             `;
-        }).join('');
-    } else {
-        timesHTML = `
-            <div class="empty-state" style="grid-column: 1 / -1;">
-                <div>📭</div>
-                <div>Nenhum evento ativo no momento</div>
-                <p style="font-size: 0.9em; margin-top: 5px;">Aguarde a abertura de um novo evento</p>
-            </div>
-        `;
+        }
+        timesGrid.innerHTML = timesHTML;
     }
-    document.getElementById('timesGrid').innerHTML = timesHTML;
 
     // Resumo detalhado
-    let resumoHTML = '';
-    let totalHTML = '';
+    const resumoContainer = document.getElementById('resumoContainer');
+    if(resumoContainer) {
+        let resumoHTML = '';
+        let totalHTML = '';
 
-    if (temTimes) {
-        resumoHTML = Object.keys(resumoAtual.times).map(time => {
-            const dados = resumoAtual.times[time];
-            return `
-                <div class="time-stats">
-                    <div class="name">${time}</div>
-                    <div class="stats">
-                        <span>Total: R$ ${dados.total.toFixed(2)}</span>
-                        <span>Probabilidade: ${dados.percentual}%</span>
+        if (temTimes) {
+            resumoHTML = Object.keys(resumoAtual.times).map(time => {
+                const dados = resumoAtual.times[time];
+                return `
+                    <div class="time-stats">
+                        <div class="name">${time}</div>
+                        <div class="stats">
+                            <span>Total: R$ ${dados.total.toFixed(2)}</span>
+                            <span>Probabilidade: ${dados.percentual}%</span>
+                        </div>
                     </div>
+                `;
+            }).join('');
+
+            totalHTML = `
+                <div class="alert alert-info" style="margin-top: 15px;">
+                    💡 <strong>Taxa da Plataforma:</strong> ${resumoAtual.percentualTaxa}% (R$ ${resumoAtual.taxaPlataforma.toFixed(2)})<br>
+                    <span style="font-size: 0.9em;">Prêmio líquido a distribuir: R$ ${resumoAtual.totalPremio.toFixed(2)}</span>
+                </div>
+                <div class="total-geral">
+                    <div class="label">Total Geral Apostado</div>
+                    <div class="value">R$ ${resumoAtual.totalGeral.toFixed(2)}</div>
                 </div>
             `;
-        }).join('');
-
-        totalHTML = `
-            <div class="alert alert-info" style="margin-top: 15px;">
-                💡 <strong>Taxa da Plataforma:</strong> ${resumoAtual.percentualTaxa}% (R$ ${resumoAtual.taxaPlataforma.toFixed(2)})<br>
-                <span style="font-size: 0.9em;">Prêmio líquido a distribuir: R$ ${resumoAtual.totalPremio.toFixed(2)}</span>
-            </div>
-            <div class="total-geral">
-                <div class="label">Total Geral Apostado</div>
-                <div class="value">R$ ${resumoAtual.totalGeral.toFixed(2)}</div>
-            </div>
-        `;
-    } else {
-        resumoHTML = `
-            <div style="text-align: center; padding: 30px; color: #999;">
-                <p>Nenhum evento ativo para exibir estatísticas</p>
-            </div>
-        `;
+        } else {
+            resumoHTML = `
+                <div style="text-align: center; padding: 30px; color: #999;">
+                    <p>Nenhum evento ativo para exibir estatísticas</p>
+                </div>
+            `;
+        }
+        resumoContainer.innerHTML = resumoHTML + totalHTML;
     }
-
-    document.getElementById('resumoContainer').innerHTML = resumoHTML + totalHTML;
 
     if (temTimes) {
         document.querySelectorAll('.time-option').forEach(el => {
@@ -330,27 +368,35 @@ function atualizarInterface() {
     }
 
     const btnApostar = document.getElementById('btnApostar');
-    if (!temTimes) {
-        btnApostar.disabled = true;
-        btnApostar.textContent = 'Sem Evento Ativo';
-    } else if (!resumoAtual.aberto) {
-        btnApostar.disabled = true;
-        btnApostar.textContent = 'Apostas Fechadas';
-    } else {
-        btnApostar.disabled = false;
-        btnApostar.textContent = 'Confirmar Aposta';
+    if(btnApostar) {
+        if (!temTimes) {
+            btnApostar.disabled = true;
+            btnApostar.textContent = 'Sem Evento Ativo';
+        } else if (!resumoAtual.aberto) {
+            btnApostar.disabled = true;
+            btnApostar.textContent = 'Apostas Fechadas';
+        } else {
+            btnApostar.disabled = false;
+            btnApostar.textContent = 'Confirmar Aposta';
+        }
     }
 }
 
 function calcularRetorno() {
-    const valorInput = document.getElementById('valor').value;
+    const valorInput = document.getElementById('valor');
+    const retornoContainer = document.getElementById('retornoContainer');
+    
+    if(!valorInput || !retornoContainer) return;
 
-    if (!timeSelecionado || !valorInput || valorInput <= 0) {
-        document.getElementById('retornoContainer').innerHTML = '';
+    if (!timeSelecionado || !valorInput.value || valorInput.value <= 0) {
+        retornoContainer.innerHTML = '';
         return;
     }
 
-    const valor = parseFloat(valorInput);
+    const valor = parseFloat(valorInput.value);
+    // Proteção contra undefined no resumo
+    if(!resumoAtual || !resumoAtual.times || !resumoAtual.times[timeSelecionado]) return;
+
     const totalGeral = resumoAtual.totalGeral + valor;
     const totalPremio = totalGeral * 0.95; 
     const totalTime = resumoAtual.times[timeSelecionado].total + valor;
@@ -365,7 +411,7 @@ function calcularRetorno() {
             </div>
         </div>
     `;
-    document.getElementById('retornoContainer').innerHTML = retornoHTML;
+    retornoContainer.innerHTML = retornoHTML;
 }
 
 function mostrarAlerta(mensagem, tipo = 'success') {
@@ -380,15 +426,18 @@ function mostrarAlerta(mensagem, tipo = 'success') {
     if (window.flashMessage) {
         window.flashMessage.show(mensagem, tipoFlash, 5000);
     } else {
+        const alertContainer = document.getElementById('alertContainer');
+        if(!alertContainer) return;
+        
         const alertHTML = `
             <div class="alert alert-${tipo}">
                 ${mensagem}
             </div>
         `;
-        document.getElementById('alertContainer').innerHTML = alertHTML;
+        alertContainer.innerHTML = alertHTML;
 
         setTimeout(() => {
-            document.getElementById('alertContainer').innerHTML = '';
+            alertContainer.innerHTML = '';
         }, 5000);
     }
 }
@@ -397,8 +446,11 @@ function mostrarAlerta(mensagem, tipo = 'success') {
 
 async function carregarEstatisticas() {
     try {
-        // CORREÇÃO: Removido credentials: 'include'
         const response = await fetch(`${API_URL}/minhas-estatisticas`);
+        
+        // Verifica se é JSON
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) return;
 
         if (response.ok) {
             const data = await response.json();
@@ -429,12 +481,16 @@ async function carregarEstatisticas() {
 
 async function carregarEventosFiltro() {
     try {
-        // CORREÇÃO: Removido credentials: 'include'
         const response = await fetch(`${API_URL}/eventos`);
+        
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) return;
 
         if (response.ok) {
             const data = await response.json();
             const select = document.getElementById('filtroEvento');
+            if(!select) return;
+
             select.innerHTML = '<option value="">Todos os eventos</option>';
 
             data.eventos.forEach(evento => {
@@ -451,18 +507,25 @@ async function carregarEventosFiltro() {
 
 async function carregarHistorico(pagina = 1) {
     paginaAtual = pagina;
-    const dataInicio = document.getElementById('filtroDataInicio').value;
-    const dataFim = document.getElementById('filtroDataFim').value;
-    const eventoId = document.getElementById('filtroEvento').value;
+    const filtroDataInicio = document.getElementById('filtroDataInicio');
+    const filtroDataFim = document.getElementById('filtroDataFim');
+    const filtroEvento = document.getElementById('filtroEvento');
+    
+    // Proteção se elementos não existirem na página atual
+    if(!filtroDataInicio) return;
 
     let url = `${API_URL}/historico-apostas?pagina=${pagina}&limite=5`;
-    if (dataInicio) url += `&dataInicio=${dataInicio}`;
-    if (dataFim) url += `&dataFim=${dataFim}`;
-    if (eventoId) url += `&eventoId=${eventoId}`;
+    if (filtroDataInicio.value) url += `&dataInicio=${filtroDataInicio.value}`;
+    if (filtroDataFim.value) url += `&dataFim=${filtroDataFim.value}`;
+    if (filtroEvento.value) url += `&eventoId=${filtroEvento.value}`;
 
     try {
-        // CORREÇÃO: Removido credentials: 'include'
         const response = await fetch(url);
+        
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+            throw new Error('Resposta inválida do histórico');
+        }
 
         if (response.ok) {
             const data = await response.json();
@@ -584,7 +647,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
-            const valor = parseFloat(document.getElementById('valor').value);
+            const valorEl = document.getElementById('valor');
+            const valor = parseFloat(valorEl.value);
 
             if (!valor || valor <= 0) {
                 mostrarAlerta('Por favor, insira um valor válido', 'error');
@@ -592,25 +656,30 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             try {
-                // CORREÇÃO: Removido credentials: 'include'
                 const response = await fetch(`${API_URL}/apostas`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ time: timeSelecionado, valor })
                 });
 
+                const contentType = response.headers.get('content-type');
+                if (!contentType || !contentType.includes('application/json')) {
+                    throw new Error('Resposta inválida do servidor ao apostar');
+                }
+
                 const data = await response.json();
 
                 if (response.ok) {
                     mostrarAlerta(`✅ Aposta confirmada!`, 'success');
                     await carregarResumo();
-                    document.getElementById('apostaForm').reset();
+                    apostaForm.reset();
                     timeSelecionado = null;
                     document.getElementById('retornoContainer').innerHTML = '';
                 } else {
                     mostrarAlerta(data.erro || 'Erro ao fazer aposta', 'error');
                 }
             } catch (error) {
+                console.error(error);
                 mostrarAlerta('Erro ao conectar com servidor', 'error');
             }
         });
