@@ -8,7 +8,6 @@ class PostgresApostaRepository extends IApostaRepository {
     }
 
     async criar(aposta) {
-        // CORREÇÃO: Postgres precisa de RETURNING id
         const sql = `
             INSERT INTO apostas (usuarioId, eventoId, time, valor, oddNoMomento, criadoEm)
             VALUES ($1, $2, $3, $4, $5, $6)
@@ -28,8 +27,6 @@ class PostgresApostaRepository extends IApostaRepository {
     }
 
     async listarPorUsuario(usuarioId) {
-        // Join básico para trazer informações úteis se necessário, 
-        // mas focando na entidade Aposta
         const sql = 'SELECT * FROM apostas WHERE usuarioId = $1 ORDER BY criadoEm DESC';
         const res = await this.db.query(sql, [usuarioId]);
         
@@ -45,10 +42,11 @@ class PostgresApostaRepository extends IApostaRepository {
     _mapRowToEntity(row) {
         return new Aposta({
             id: row.id,
-            usuarioId: row.usuarioid || row.usuarioId, // Postgres retorna lowercase
+            // Fallbacks para garantir leitura correta independente do driver
+            usuarioId: row.usuarioid || row.usuarioId, 
             eventoId: row.eventoid || row.eventoId,
             time: row.time,
-            valor: parseFloat(row.valor),
+            valor: parseFloat(row.valor), // Garante número
             oddNoMomento: parseFloat(row.oddnomomento || row.oddNoMomento || 0),
             criadoEm: row.criadoem || row.criadoEm
         });

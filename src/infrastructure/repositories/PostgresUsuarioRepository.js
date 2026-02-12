@@ -24,7 +24,6 @@ class PostgresUsuarioRepository extends IUsuarioRepository {
     }
 
     async criar(usuario) {
-        // CORREÇÃO: Forçar minúsculo ao salvar para garantir compatibilidade com buscarPorEmail
         const emailParaSalvar = usuario.email.toString().toLowerCase().trim();
         
         const sql = `
@@ -32,12 +31,14 @@ class PostgresUsuarioRepository extends IUsuarioRepository {
             VALUES ($1, $2, $3, $4, $5, $6, $7)
             RETURNING id
         `;
+        // Postgres prefere true/false nativo em vez de 1/0, mas aceita ambos.
+        // Convertendo para boolean nativo para garantir.
         const params = [
             usuario.nome,
             emailParaSalvar,
             usuario.senha,
-            usuario.isAdmin ? 1 : 0,
-            usuario.isSuperAdmin ? 1 : 0,
+            !!usuario.isAdmin, 
+            !!usuario.isSuperAdmin,
             usuario.tipo,
             usuario.criadoEm
         ];
@@ -56,8 +57,8 @@ class PostgresUsuarioRepository extends IUsuarioRepository {
         const params = [
             usuario.nome,
             emailParaSalvar,
-            usuario.isAdmin ? 1 : 0,
-            usuario.isSuperAdmin ? 1 : 0,
+            !!usuario.isAdmin,
+            !!usuario.isSuperAdmin,
             usuario.tipo,
             usuario.id
         ];
@@ -76,13 +77,14 @@ class PostgresUsuarioRepository extends IUsuarioRepository {
     }
 
     _mapRowToEntity(row) {
+        // Mapeamento à prova de falhas (CamelCase ou lowercase)
         return new Usuario({
             id: row.id,
             nome: row.nome,
             email: new Email(row.email),
             senha: row.senha,
-            isAdmin: (row.isadmin === true || row.isadmin === 1),
-            isSuperAdmin: (row.issuperadmin === true || row.issuperadmin === 1),
+            isAdmin: (row.isadmin === true || row.isAdmin === true),
+            isSuperAdmin: (row.issuperadmin === true || row.isSuperAdmin === true),
             tipo: row.tipo,
             criadoEm: row.criadoem || row.criadoEm
         });

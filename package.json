@@ -4,7 +4,8 @@
     "description": "Mini Polymarket - Bolão Privado entre Amigos",
     "main": "server.js",
     "scripts": {
-        "start": "node scripts/setup-postgres.js && node server.js",
+        "setup": "node scripts/setup-postgres.js",
+        "start": "node server.js",
         "dev": "node server.js",
         "test": "jest --coverage --verbose",
         "test:watch": "jest --watch",
@@ -25,9 +26,10 @@
         "express": "^4.18.2",
         "express-rate-limit": "^8.2.1",
         "express-session": "^1.18.2",
+        "connect-pg-simple": "^9.0.1",
         "helmet": "^8.1.0",
         "jsonwebtoken": "^9.0.3",
-        "pg": "^8.18.0"
+        "pg": "^8.11.3"
     },
     "devDependencies": {
         "jest": "^29.7.0",
