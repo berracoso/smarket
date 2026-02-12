@@ -1,75 +1,49 @@
-/**
- * Middleware de Autenticação
- * Verifica se o usuário está autenticado via token JWT
- */
 class AuthenticationMiddleware {
-    constructor(sessionManager) {
-        this.sessionManager = sessionManager;
+  constructor(sessionManager) {
+    this.sessionManager = sessionManager;
+    // Garante que o 'this' se refere à instância da classe
+    this.verificar = this.verificar.bind(this);
+  }
+
+  verificar(req, res, next) {
+    try {
+      // 1. Tentar pegar do header Authorization (Padrão mais comum)
+      let token = req.headers['authorization'];
+
+      // 2. Fallback para x-access-token (Legado)
+      if (!token) {
+        token = req.headers['x-access-token'];
+      }
+
+      // 3. Limpeza do prefixo "Bearer " se existir
+      if (token && token.startsWith('Bearer ')) {
+        // Remove os primeiros 7 caracteres ("Bearer ")
+        token = token.slice(7, token.length).trim();
+      }
+
+      // Se ainda não tiver token, retorna erro
+      if (!token) {
+        return res.status(401).json({ 
+          erro: 'Acesso negado. Token não fornecido.',
+          tipo: 'auth_required' 
+        });
+      }
+
+      // 4. Verificar validade do token usando o SessionManager
+      const decoded = this.sessionManager.verificarToken(token);
+      
+      // 5. Anexar usuário decodificado à requisição
+      req.usuario = decoded;
+      
+      next();
+    } catch (error) {
+      console.error('Erro de autenticação:', error.message);
+      return res.status(401).json({ 
+        erro: 'Token inválido ou expirado.',
+        tipo: 'auth_required'
+      });
     }
-
-    /**
-     * Middleware para verificar autenticação (Bloqueia se inválido)
-     */
-    requireAuth() {
-        return (req, res, next) => {
-            // Tenta pegar o token do header Authorization: Bearer <token>
-            let token = null;
-            const authHeader = req.headers.authorization;
-            
-            if (authHeader && authHeader.startsWith('Bearer ')) {
-                token = authHeader.split(' ')[1];
-            } else if (req.body.token) {
-                token = req.body.token; // Fallback
-            }
-
-            if (!token) {
-                return res.status(401).json({
-                    sucesso: false,
-                    erro: 'Token não fornecido. Faça login para continuar.'
-                });
-            }
-
-            try {
-                // Verifica o token usando o sessionManager
-                const decoded = this.sessionManager.verificarToken(token);
-                
-                // Anexa o ID do usuário ao request
-                req.userId = decoded.id;
-                req.usuario = decoded; // Dados básicos (nome, email, tipo)
-                next();
-            } catch (err) {
-                return res.status(401).json({
-                    sucesso: false,
-                    erro: 'Sessão inválida ou expirada.'
-                });
-            }
-        };
-    }
-
-    /**
-     * Middleware opcional - não bloqueia se falhar, apenas não popula o user
-     */
-    optionalAuth() {
-        return (req, res, next) => {
-            let token = null;
-            const authHeader = req.headers.authorization;
-            
-            if (authHeader && authHeader.startsWith('Bearer ')) {
-                token = authHeader.split(' ')[1];
-            }
-
-            if (token) {
-                try {
-                    const decoded = this.sessionManager.verificarToken(token);
-                    req.userId = decoded.id;
-                    req.usuario = decoded;
-                } catch (err) {
-                    // Ignora erro no opcional
-                }
-            }
-            next();
-        };
-    }
+  }
 }
 
 module.exports = AuthenticationMiddleware;
