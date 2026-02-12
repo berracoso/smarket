@@ -7,9 +7,9 @@ let paginaAtual = 1;
 // Verificar autenticação
 async function verificarAuth() {
     try {
-        const response = await fetch(`${API_URL}/auth/me`, {
-            credentials: 'include'
-        });
+        // CORREÇÃO: Removido credentials: 'include' para evitar erro de CORS
+        // O token é injetado automaticamente pelo permission-interceptor.js
+        const response = await fetch(`${API_URL}/auth/me`);
 
         if (response.ok) {
             const data = await response.json();
@@ -22,51 +22,50 @@ async function verificarAuth() {
             const superAdminAlertMinhas = document.getElementById('superAdminAlertMinhas');
             const userName = document.getElementById('userName');
 
-            // Resetar estado inicial (garantir que estão ocultos por padrão)
+            // Resetar estado inicial
             if (menuAdmin) menuAdmin.style.display = 'none';
             if (superAdminAlert) superAdminAlert.style.display = 'none';
             if (superAdminAlertMinhas) superAdminAlertMinhas.style.display = 'none';
             if (apostaCard) apostaCard.style.display = 'block';
 
-            // Se for admin (Super Admin ou Admin Promovido), mostrar botão de admin
+            // Configuração de visualização baseada no nível de acesso
             if (usuarioAtual.isAdmin === true) {
                 if (menuAdmin) menuAdmin.style.display = 'flex';
             }
 
-            // Se for Super Admin, ocultar formulário de apostas e mostrar alertas
             if (usuarioAtual.isSuperAdmin === true) {
                 if (apostaCard) apostaCard.style.display = 'none';
                 if (superAdminAlert) superAdminAlert.style.display = 'block';
                 if (superAdminAlertMinhas) superAdminAlertMinhas.style.display = 'block';
                 if (userName) userName.innerHTML = `👤 ${usuarioAtual.nome} <span style="background: #dc2626; color: white; padding: 2px 8px; border-radius: 10px; font-size: 0.8em; margin-left: 5px;">SUPER ADMIN</span>`;
-            }
-            // Se for admin promovido (não super admin), mostrar badge ADMIN
-            else if (usuarioAtual.isAdmin === true) {
+            } else if (usuarioAtual.isAdmin === true) {
                 if (userName) userName.innerHTML = `👤 ${usuarioAtual.nome} <span style="background: #fbbf24; color: #78350f; padding: 2px 8px; border-radius: 10px; font-size: 0.8em; margin-left: 5px;">ADMIN</span>`;
-            } 
-            // Usuário comum
-            else {
+            } else {
                 if (userName) userName.innerHTML = `👤 ${usuarioAtual.nome}`;
             }
 
-            // Carregar dados da conta
             carregarConta();
         } else {
-            // Não autenticado, redirecionar para login
-            window.location.href = '/login';
+            // Se o servidor retornar 401, o interceptor já lida, mas garantimos aqui
+            if (response.status === 401 || response.status === 403) {
+                console.warn('Falha na autenticação, redirecionando...');
+                window.location.href = '/login';
+            }
         }
     } catch (error) {
-        window.location.href = '/login';
+        console.error('Erro de conexão ao verificar auth:', error);
+        // CORREÇÃO: Não redirecionar imediatamente em erro de rede genérico,
+        // pois pode ser apenas servidor offline momentaneamente.
+        // O usuário verá o estado "Carregando..." ou podemos mostrar um alerta.
+        mostrarAlerta('Erro de conexão com o servidor.', 'error');
     }
 }
 
 // Mostrar seção
 function mostrarSecao(secao) {
-    // Ocultar todas as seções
     document.querySelectorAll('.section-content').forEach(s => s.classList.remove('active'));
     document.querySelectorAll('.menu-item').forEach(m => m.classList.remove('active'));
 
-    // Mostrar seção selecionada
     if (secao === 'apostas') {
         document.getElementById('secaoApostas').classList.add('active');
         document.getElementById('menuApostas').classList.add('active');
@@ -89,9 +88,8 @@ function mostrarSecao(secao) {
 // Carregar minhas apostas
 async function carregarMinhasApostas() {
     try {
-        const response = await fetch(`${API_URL}/minhas-apostas`, {
-            credentials: 'include'
-        });
+        // CORREÇÃO: Removido credentials: 'include'
+        const response = await fetch(`${API_URL}/minhas-apostas`);
 
         if (response.ok) {
             const data = await response.json();
@@ -197,7 +195,6 @@ function carregarConta() {
 
     document.getElementById('contaContainer').innerHTML = contaHTML;
     
-    // Adicionar event listener para o botão de logout da conta
     const btnLogoutConta = document.querySelector('.btn-logout-conta');
     if (btnLogoutConta) {
         btnLogoutConta.addEventListener('click', logout);
@@ -207,34 +204,37 @@ function carregarConta() {
 // Logout
 async function logout() {
     try {
+        // Remove token localmente primeiro para evitar race condition
+        localStorage.removeItem('token');
+        
+        // Tenta avisar o servidor (opcional com JWT stateless, mas boa prática)
         await fetch(`${API_URL}/auth/logout`, {
-            method: 'POST',
-            credentials: 'include'
+            method: 'POST'
         });
-        window.location.href = '/login';
     } catch (error) {
+        console.error('Erro no logout', error);
+    } finally {
         window.location.href = '/login';
     }
 }
 
-
-
 // Carregar resumo inicial
 async function carregarResumo() {
     try {
-        const response = await fetch(`${API_URL}/resumo`, {
-            credentials: 'include'
-        });
+        // CORREÇÃO: Removido credentials: 'include'
+        const response = await fetch(`${API_URL}/resumo`);
+        
+        if (!response.ok) return; // Se der erro, apenas ignora para não floodar alertas
+        
         resumoAtual = await response.json();
         atualizarInterface();
     } catch (error) {
-        mostrarAlerta('Erro ao carregar dados', 'error');
+        console.error('Erro ao carregar resumo', error);
     }
 }
 
 // Atualizar interface com dados do resumo
 function atualizarInterface() {
-    // Verificar se há evento/times disponíveis
     const temTimes = resumoAtual.times && Object.keys(resumoAtual.times).length > 0;
 
     // Status
@@ -319,7 +319,6 @@ function atualizarInterface() {
 
     document.getElementById('resumoContainer').innerHTML = resumoHTML + totalHTML;
 
-    // Adicionar eventos de clique nos times (apenas se houver times)
     if (temTimes) {
         document.querySelectorAll('.time-option').forEach(el => {
             el.addEventListener('click', () => {
@@ -330,7 +329,6 @@ function atualizarInterface() {
         });
     }
 
-    // Desabilitar formulário se apostas fechadas ou sem evento
     const btnApostar = document.getElementById('btnApostar');
     if (!temTimes) {
         btnApostar.disabled = true;
@@ -344,7 +342,6 @@ function atualizarInterface() {
     }
 }
 
-// Calcular retorno estimado
 function calcularRetorno() {
     const valorInput = document.getElementById('valor').value;
 
@@ -355,7 +352,7 @@ function calcularRetorno() {
 
     const valor = parseFloat(valorInput);
     const totalGeral = resumoAtual.totalGeral + valor;
-    const totalPremio = totalGeral * 0.95; // Desconta 5%
+    const totalPremio = totalGeral * 0.95; 
     const totalTime = resumoAtual.times[timeSelecionado].total + valor;
     const retorno = (valor / totalTime) * totalPremio;
 
@@ -371,23 +368,18 @@ function calcularRetorno() {
     document.getElementById('retornoContainer').innerHTML = retornoHTML;
 }
 
-// Mostrar alerta usando Flash Message
 function mostrarAlerta(mensagem, tipo = 'success') {
-    // Mapear tipos para o Flash Message
     const tipoMap = {
         'success': 'success',
         'error': 'error',
         'warning': 'warning',
         'info': 'info'
     };
-
     const tipoFlash = tipoMap[tipo] || 'info';
 
-    // Usar Flash Message se disponível
     if (window.flashMessage) {
         window.flashMessage.show(mensagem, tipoFlash, 5000);
     } else {
-        // Fallback para o sistema antigo se Flash Message não carregou
         const alertHTML = `
             <div class="alert alert-${tipo}">
                 ${mensagem}
@@ -401,18 +393,15 @@ function mostrarAlerta(mensagem, tipo = 'success') {
     }
 }
 
-// ==================== HISTÓRICO DE APOSTAS ====================
+// ==================== HISTÓRICO ====================
 
-// Carregar estatísticas gerais
 async function carregarEstatisticas() {
     try {
-        const response = await fetch(`${API_URL}/minhas-estatisticas`, {
-            credentials: 'include'
-        });
+        // CORREÇÃO: Removido credentials: 'include'
+        const response = await fetch(`${API_URL}/minhas-estatisticas`);
 
         if (response.ok) {
             const data = await response.json();
-
             const estatisticasHTML = `
                 <div class="stat-card stat-card-blue">
                     <div class="stat-value">R$ ${data.totalApostado}</div>
@@ -431,7 +420,6 @@ async function carregarEstatisticas() {
                     <div class="stat-label">Taxa de Acerto</div>
                 </div>
             `;
-
             document.getElementById('estatisticasContainer').innerHTML = estatisticasHTML;
         }
     } catch (error) {
@@ -439,16 +427,13 @@ async function carregarEstatisticas() {
     }
 }
 
-// Carregar eventos para filtro
 async function carregarEventosFiltro() {
     try {
-        const response = await fetch(`${API_URL}/eventos`, {
-            credentials: 'include'
-        });
+        // CORREÇÃO: Removido credentials: 'include'
+        const response = await fetch(`${API_URL}/eventos`);
 
         if (response.ok) {
             const data = await response.json();
-
             const select = document.getElementById('filtroEvento');
             select.innerHTML = '<option value="">Todos os eventos</option>';
 
@@ -464,10 +449,8 @@ async function carregarEventosFiltro() {
     }
 }
 
-// Carregar histórico com filtros e paginação
 async function carregarHistorico(pagina = 1) {
     paginaAtual = pagina;
-
     const dataInicio = document.getElementById('filtroDataInicio').value;
     const dataFim = document.getElementById('filtroDataFim').value;
     const eventoId = document.getElementById('filtroEvento').value;
@@ -478,9 +461,8 @@ async function carregarHistorico(pagina = 1) {
     if (eventoId) url += `&eventoId=${eventoId}`;
 
     try {
-        const response = await fetch(url, {
-            credentials: 'include'
-        });
+        // CORREÇÃO: Removido credentials: 'include'
+        const response = await fetch(url);
 
         if (response.ok) {
             const data = await response.json();
@@ -534,7 +516,6 @@ async function carregarHistorico(pagina = 1) {
 
             document.getElementById('historicoContainer').innerHTML = apostasHTML;
 
-            // Paginação
             if (data.paginacao.totalPaginas > 1) {
                 let paginacaoHTML = '';
 
@@ -550,7 +531,6 @@ async function carregarHistorico(pagina = 1) {
 
                 document.getElementById('paginacaoContainer').innerHTML = paginacaoHTML;
 
-                // Adicionar event listeners para botões de paginação
                 document.querySelectorAll('.btn-paginacao').forEach(btn => {
                     btn.addEventListener('click', () => {
                         const pagina = parseInt(btn.dataset.pagina);
@@ -572,14 +552,11 @@ async function carregarHistorico(pagina = 1) {
     }
 }
 
-// Função auxiliar para filtrar
 function filtrarHistorico() {
     carregarHistorico(1);
 }
 
-// Inicializar quando DOM estiver pronto
 document.addEventListener('DOMContentLoaded', () => {
-    // Menu lateral - event listeners
     const menuApostas = document.getElementById('menuApostas');
     const menuMinhasApostas = document.getElementById('menuMinhasApostas');
     const menuHistorico = document.getElementById('menuHistorico');
@@ -598,7 +575,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (btnLogout) btnLogout.addEventListener('click', logout);
     if (btnFiltrar) btnFiltrar.addEventListener('click', filtrarHistorico);
 
-    // Form de aposta
     if (apostaForm) {
         apostaForm.addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -616,10 +592,10 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             try {
+                // CORREÇÃO: Removido credentials: 'include'
                 const response = await fetch(`${API_URL}/apostas`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    credentials: 'include',
                     body: JSON.stringify({ time: timeSelecionado, valor })
                 });
 
@@ -640,16 +616,12 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Atualizar retorno ao mudar valor
     if (valorInput) valorInput.addEventListener('input', calcularRetorno);
 
-    // Verificar auth e carregar dados
     (async function inicializar() {
         await verificarAuth();
         carregarResumo();
     })();
 
-    // Atualizar a cada 10 segundos
     setInterval(carregarResumo, 10000);
 });
-

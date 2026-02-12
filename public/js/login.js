@@ -36,17 +36,16 @@ async function handleLogin(event) {
     btnLogin.textContent = 'Entrando...';
 
     try {
+        // CORREÇÃO: Removido credentials: 'include'
         const response = await fetch(`${API_URL}/auth/login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
             body: JSON.stringify({ email, senha })
         });
 
         const data = await response.json();
 
         if (response.ok) {
-            // CORREÇÃO: Salvar o token no LocalStorage
             if (data.token) {
                 localStorage.setItem('token', data.token);
             }
@@ -86,17 +85,16 @@ async function handleRegistro(event) {
     btnRegistro.textContent = 'Criando conta...';
 
     try {
+        // CORREÇÃO: Removido credentials: 'include'
         const response = await fetch(`${API_URL}/auth/registro`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
             body: JSON.stringify({ nome, email, senha })
         });
 
         const data = await response.json();
 
         if (response.ok) {
-            // CORREÇÃO: Salvar o token no LocalStorage ao registrar
             if (data.token) {
                 localStorage.setItem('token', data.token);
             }
@@ -121,10 +119,8 @@ async function handleRegistro(event) {
 // Verificar se já está logado
 async function verificarSessao() {
     try {
-        const response = await fetch(`${API_URL}/auth/me`, {
-            credentials: 'include'
-            // O interceptor cuidará do header Authorization
-        });
+        // CORREÇÃO: Removido credentials: 'include'
+        const response = await fetch(`${API_URL}/auth/me`);
 
         if (response.ok) {
             const data = await response.json();
@@ -134,7 +130,6 @@ async function verificarSessao() {
                 window.location.href = '/';
             }
         } else {
-            // Se falhar a verificação, limpa qualquer token inválido
             localStorage.removeItem('token');
         }
     } catch (error) {
