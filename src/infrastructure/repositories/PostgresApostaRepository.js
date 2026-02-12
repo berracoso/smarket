@@ -15,9 +15,11 @@ class PostgresApostaRepository extends IApostaRepository {
     }
 
     async criar(aposta) {
+        // CORREÇÃO: Postgres exige nomes de colunas exatos se não estiverem em minúsculo, 
+        // mas aqui estamos usando os nomes criados no setup (que ficaram minúsculos/insensitivos).
         const sql = `
-            INSERT INTO apostas (userId, eventoId, nome, time, valor, timestamp)
-            VALUES ($1, $2, $3, $4, $5, $6)
+            INSERT INTO apostas (userId, eventoId, nome, time, valor, timestamp, ganhou, lucroReal)
+            VALUES ($1, $2, $3, $4, $5, $6, 0, 0)
             RETURNING id
         `;
         const params = [
@@ -33,7 +35,14 @@ class PostgresApostaRepository extends IApostaRepository {
     }
 
     async listarPorUsuarioEEvento(userId, eventoId) {
-        const sql = 'SELECT * FROM apostas WHERE userId = $1 AND eventoId = $2 ORDER BY timestamp DESC';
+        // CORREÇÃO: Adicionado JOIN para buscar o nome do evento, essencial para o frontend
+        const sql = `
+            SELECT a.*, e.nome as nome_evento 
+            FROM apostas a
+            LEFT JOIN eventos_historico e ON a.eventoId = e.id
+            WHERE a.userId = $1 AND a.eventoId = $2 
+            ORDER BY a.timestamp DESC
+        `;
         const res = await this.db.query(sql, [userId, eventoId]);
         return res.rows.map(row => this._mapRowToEntity(row));
     }
@@ -45,17 +54,23 @@ class PostgresApostaRepository extends IApostaRepository {
     }
 
     async listarPorUsuario(userId, filtros = {}) {
-        let sql = 'SELECT * FROM apostas WHERE userId = $1';
+        // CORREÇÃO CRÍTICA: Join com eventos_historico para trazer o nome do evento na lista "Minhas Apostas"
+        let sql = `
+            SELECT a.*, e.nome as nome_evento
+            FROM apostas a
+            LEFT JOIN eventos_historico e ON a.eventoId = e.id
+            WHERE a.userId = $1
+        `;
         const params = [userId];
         let paramCount = 1;
 
         if (filtros.eventoId) {
             paramCount++;
-            sql += ` AND eventoId = $${paramCount}`;
+            sql += ` AND a.eventoId = $${paramCount}`;
             params.push(filtros.eventoId);
         }
 
-        sql += ' ORDER BY timestamp DESC';
+        sql += ' ORDER BY a.timestamp DESC';
 
         if (filtros.limite) {
             paramCount++;
@@ -70,7 +85,6 @@ class PostgresApostaRepository extends IApostaRepository {
     async calcularTotalPorTime(eventoId, time) {
         const sql = 'SELECT COALESCE(SUM(valor), 0) as total FROM apostas WHERE eventoId = $1 AND time = $2';
         const res = await this.db.query(sql, [eventoId, time]);
-        // Postgres retorna SUM como string para evitar overflow, precisamos converter
         return res.rows[0] ? Number(res.rows[0].total) : 0;
     }
 
@@ -98,23 +112,29 @@ class PostgresApostaRepository extends IApostaRepository {
             ORDER BY totalApostado DESC
         `;
         const res = await this.db.query(sql, [eventoId]);
-        // Converter strings numéricas do Postgres de volta para numeros
         return res.rows.map(r => ({
             ...r,
+            // Postgres retorna SUM como string
             totalapostado: Number(r.totalapostado || r.totalApostado)
         }));
     }
 
     _mapRowToEntity(row) {
+        // CORREÇÃO CRÍTICA: Postgres retorna todas colunas em minúsculo (userid, eventoid, lucroreal).
+        // Se você tentar acessar row.userId ou row.lucroReal direto, vai dar undefined.
         return new Aposta({
             id: row.id,
-            userId: row.userid || row.userId, // Postgres retorna minúsculo
+            userId: row.userid || row.userId,
             eventoId: row.eventoid || row.eventoId,
-            eventoNome: row.eventonome || row.eventoNome || '',
+            // Pega o nome do evento vindo do JOIN (nome_evento) ou tenta fallbacks
+            eventoNome: row.nome_evento || row.eventonome || row.eventoNome || '',
             nome: row.nome,
             time: row.time,
             valor: new ValorAposta(Number(row.valor)),
-            timestamp: row.timestamp // Postgres retorna objeto Date ou string ISO
+            timestamp: row.timestamp,
+            // CORREÇÃO: Adicionado mapeamento de ganhou e lucroReal que faltavam
+            ganhou: (row.ganhou === 1 || row.ganhou === true),
+            lucroReal: Number(row.lucroreal || row.lucroReal || 0)
         });
     }
 }

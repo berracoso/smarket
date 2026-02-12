@@ -15,10 +15,7 @@ class PostgresUsuarioRepository extends IUsuarioRepository {
     }
 
     async buscarPorEmail(email) {
-        // CORREÇÃO: Verifica se 'email' é um objeto (Value Object) ou string direta
         const emailString = email.endereco || email;
-        
-        // Garante conversão para string para evitar erro de .toLowerCase() is not a function
         const emailNormalizado = String(emailString).toLowerCase().trim();
         
         const res = await this.db.query('SELECT * FROM usuarios WHERE email = $1', [emailNormalizado]);
@@ -27,6 +24,9 @@ class PostgresUsuarioRepository extends IUsuarioRepository {
     }
 
     async criar(usuario) {
+        // CORREÇÃO: Forçar minúsculo ao salvar para garantir compatibilidade com buscarPorEmail
+        const emailParaSalvar = usuario.email.toString().toLowerCase().trim();
+        
         const sql = `
             INSERT INTO usuarios (nome, email, senha, isAdmin, isSuperAdmin, tipo, criadoEm)
             VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -34,7 +34,7 @@ class PostgresUsuarioRepository extends IUsuarioRepository {
         `;
         const params = [
             usuario.nome,
-            usuario.email.toString(),
+            emailParaSalvar,
             usuario.senha,
             usuario.isAdmin ? 1 : 0,
             usuario.isSuperAdmin ? 1 : 0,
@@ -46,6 +46,8 @@ class PostgresUsuarioRepository extends IUsuarioRepository {
     }
 
     async atualizar(usuario) {
+        const emailParaSalvar = usuario.email.toString().toLowerCase().trim();
+
         const sql = `
             UPDATE usuarios 
             SET nome = $1, email = $2, isAdmin = $3, isSuperAdmin = $4, tipo = $5
@@ -53,7 +55,7 @@ class PostgresUsuarioRepository extends IUsuarioRepository {
         `;
         const params = [
             usuario.nome,
-            usuario.email.toString(),
+            emailParaSalvar,
             usuario.isAdmin ? 1 : 0,
             usuario.isSuperAdmin ? 1 : 0,
             usuario.tipo,
@@ -79,7 +81,6 @@ class PostgresUsuarioRepository extends IUsuarioRepository {
             nome: row.nome,
             email: new Email(row.email),
             senha: row.senha,
-            // Compatibilidade com Postgres (que retorna nomes de colunas em minúsculo)
             isAdmin: (row.isadmin === true || row.isadmin === 1),
             isSuperAdmin: (row.issuperadmin === true || row.issuperadmin === 1),
             tipo: row.tipo,

@@ -1,12 +1,10 @@
 /**
  * Script de Inicialização do Banco de Dados PostgreSQL
- * CORRIGIDO: Agora falha o deploy se houver erro no banco.
  */
 require('dotenv').config();
 const { Pool } = require('pg');
 const bcrypt = require('bcryptjs');
 
-// Verificação Crítica: Sem isso, o deploy deve falhar imediatamente.
 if (!process.env.DATABASE_URL) {
     console.error('❌ ERRO CRÍTICO: DATABASE_URL não definida.');
     console.error('👉 No Render: Vá em Environment e adicione DATABASE_URL com a Internal URL do seu Postgres.');
@@ -15,14 +13,12 @@ if (!process.env.DATABASE_URL) {
 
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
-    ssl: { rejectUnauthorized: false } // Necessário para Render
+    ssl: { rejectUnauthorized: false }
 });
 
 async function setup() {
     try {
         console.log('🔧 Inicializando PostgreSQL...');
-
-        // Tenta conectar simples para validar a URL antes de criar tabelas
         await pool.query('SELECT 1'); 
 
         // 1. Tabela Usuarios
@@ -74,8 +70,10 @@ async function setup() {
         `);
         console.log('✅ Tabela apostas verificada');
 
-        // 4. Criar Super Admin se não existir
-        const adminEmail = process.env.ADMIN_EMAIL || 'admin@bolao.com';
+        // 4. Criar Super Admin (CORREÇÃO: Normalizar email para minúsculo)
+        const rawAdminEmail = process.env.ADMIN_EMAIL || 'admin@bolao.com';
+        const adminEmail = rawAdminEmail.toLowerCase().trim();
+        
         const res = await pool.query('SELECT * FROM usuarios WHERE email = $1', [adminEmail]);
         
         if (res.rows.length === 0) {
@@ -93,11 +91,10 @@ async function setup() {
         }
 
         console.log('\n🎉 Banco de dados PostgreSQL configurado com sucesso!');
-        process.exit(0); // Sucesso explícito
+        process.exit(0);
 
     } catch (err) {
         console.error('\n❌ ERRO FATAL NO SETUP DO BANCO:', err);
-        // IMPORTANTE: Força o erro para o Render não tentar iniciar o servidor sem banco
         process.exit(1); 
     } finally {
         await pool.end();
