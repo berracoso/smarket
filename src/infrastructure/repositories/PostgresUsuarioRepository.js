@@ -15,7 +15,13 @@ class PostgresUsuarioRepository extends IUsuarioRepository {
     }
 
     async buscarPorEmail(email) {
-        const emailNormalizado = email.toLowerCase().trim();
+        // CORREÇÃO: Garante que estamos pegando a string do email
+        // O ValueObject Email pode ser passado inteiro, então pegamos .endereco ou ele mesmo
+        const emailString = email.endereco || email; 
+        
+        // Normaliza para minúsculo e remove espaços
+        const emailNormalizado = String(emailString).toLowerCase().trim();
+        
         const res = await this.db.query('SELECT * FROM usuarios WHERE email = $1', [emailNormalizado]);
         if (res.rows.length === 0) return null;
         return this._mapRowToEntity(res.rows[0]);
@@ -69,16 +75,18 @@ class PostgresUsuarioRepository extends IUsuarioRepository {
     }
 
     _mapRowToEntity(row) {
-        // Postgres retorna nomes de colunas em minúsculo! (isadmin vs isAdmin)
+        // CORREÇÃO: O PostgreSQL retorna colunas em minúsculo (ex: isadmin em vez de isAdmin)
+        // Precisamos verificar as duas formas para garantir
         return new Usuario({
             id: row.id,
             nome: row.nome,
             email: new Email(row.email),
             senha: row.senha,
-            isAdmin: row.isadmin === 1 || row.isadmin === true,
-            isSuperAdmin: row.issuperadmin === 1 || row.issuperadmin === true,
+            // Verifica se é true (booleano) ou 1 (inteiro)
+            isAdmin: (row.isadmin === true || row.isadmin === 1),
+            isSuperAdmin: (row.issuperadmin === true || row.issuperadmin === 1),
             tipo: row.tipo,
-            criadoEm: row.criadoem
+            criadoEm: row.criadoem || row.criadoEm // Tenta minúsculo (Postgres) ou camelCase
         });
     }
 }
