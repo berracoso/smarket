@@ -13,7 +13,7 @@ const {
 
 const router = Router();
 
-// Instanciando o controller com os casos de uso
+// Instanciando o controller com todos os casos de uso necessários
 const apostasController = new ApostasController(
     criarAposta,
     listarMinhasApostas,
@@ -24,7 +24,7 @@ const apostasController = new ApostasController(
 // Todas as rotas requerem autenticação
 router.use(authenticationMiddleware.requireAuth());
 
-// POST /apostas - Criar nova aposta (Requer permissão de aposta)
+// POST /apostas - Criar nova aposta
 router.post('/', authorizationMiddleware.canBet(), (req, res, next) => {
     apostasController.criar(req, res, next);
 });
