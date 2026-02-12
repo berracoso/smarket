@@ -1,59 +1,33 @@
 const { Router } = require('express');
-
-// Importa os arquivos de rota
 const authRoutes = require('./auth.routes');
-const apostasRoutes = require('./apostas.routes');
 const eventosRoutes = require('./eventos.routes');
-const legacyRoutes = require('./legacy.routes'); // IMPORTANTE: Rotas de compatibilidade
-
-// Importa Controllers e Casos de Uso do Container para as rotas legadas
-const ApostasController = require('../controllers/ApostasController');
-const EventosController = require('../controllers/EventosController');
-
-// Busca as dependências no Container de Injeção de Dependência
-const {
-    criarAposta,
-    listarMinhasApostas,
-    obterHistoricoApostas,
-    calcularRetornoEstimado,
-    obterEventoAtivo,
-    criarNovoEvento,
-    abrirFecharApostas,
-    definirVencedor,
-    resetarEvento,
-    authenticationMiddleware
-} = require('../../../infrastructure/config/container');
+const apostasRoutes = require('./apostas.routes');
+const usersRoutes = require('./users.routes'); // Se existir
 
 const router = Router();
 
-// --- Instancia os Controllers necessários para as rotas antigas ---
-const apostasController = new ApostasController(
-    criarAposta,
-    listarMinhasApostas,
-    obterHistoricoApostas,
-    calcularRetornoEstimado
-);
+// Health Check
+router.get('/health', (req, res) => res.send('OK'));
 
-const eventosController = new EventosController(
-    obterEventoAtivo,
-    criarNovoEvento,
-    abrirFecharApostas,
-    definirVencedor,
-    resetarEvento
-);
-
-// --- Monta as Rotas ---
-
-// 1. Rotas Novas (Padrão Clean Arch)
+// Rotas de Autenticação
 router.use('/auth', authRoutes);
-router.use('/apostas', apostasRoutes);
+
+// Rotas de Eventos (Públicas e Privadas mistas, tratadas dentro do router)
 router.use('/eventos', eventosRoutes);
 
-// 2. Rotas Legadas (Compatibilidade com Frontend antigo)
-// Resolve o erro "Erro ao carregar dados"
-router.use('/', legacyRoutes(apostasController, eventosController, authenticationMiddleware));
+// Rotas de Apostas
+router.use('/apostas', apostasRoutes);
 
-// 3. Rota de saúde (Health Check)
-router.get('/health', (req, res) => res.json({ status: 'OK' }));
+// Rotas de Usuários (Admin)
+// Verifica se o arquivo existe antes de carregar para não dar erro
+if (usersRoutes) {
+    router.use('/users', usersRoutes);
+}
+
+// Rota de compatibilidade para o frontend antigo se necessário
+router.use('/minhas-apostas', (req, res) => {
+    // Redireciona internamente para a nova rota padronizada
+    res.redirect(307, '/apostas/minhas'); 
+});
 
 module.exports = router;

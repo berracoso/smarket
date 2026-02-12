@@ -7,39 +7,28 @@ class PostgresEventoRepository extends IEventoRepository {
         this.db = database;
     }
 
-    async buscarPorId(id) {
-        const res = await this.db.query('SELECT * FROM eventos_historico WHERE id = $1', [id]);
-        if (res.rows.length === 0) return null;
-        return this._mapRowToEntity(res.rows[0]);
-    }
-
-    async buscarEventoAtivo() {
-        const res = await this.db.query(
-            'SELECT * FROM eventos_historico WHERE status = $1 ORDER BY id DESC LIMIT 1', 
-            ['ativo']
-        );
+    async buscarAtivo() {
+        // Busca o último evento criado que ainda esteja aberto
+        const sql = 'SELECT * FROM eventos WHERE status = $1 ORDER BY criadoEm DESC LIMIT 1';
+        const res = await this.db.query(sql, ['aberto']);
+        
         if (res.rows.length === 0) return null;
         return this._mapRowToEntity(res.rows[0]);
     }
 
     async criar(evento) {
-        // Arquiva anteriores
-        await this.db.query('UPDATE eventos_historico SET status = $1 WHERE status = $2', ['arquivado', 'ativo']);
-
+        // CORREÇÃO: Postgres precisa de RETURNING id
         const sql = `
-            INSERT INTO eventos_historico (codigo, nome, times, aberto, status, vencedor, criadoEm)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            INSERT INTO eventos (nome, status, times, criadoEm, atualizadoEm)
+            VALUES ($1, $2, $3, $4, $5)
             RETURNING id
         `;
-
         const params = [
-            evento.codigo,
             evento.nome,
-            JSON.stringify(evento.times), // Salva como texto JSON
-            evento.aberto ? 1 : 0,
             evento.status,
-            evento.vencedor,
-            evento.criadoEm
+            JSON.stringify(evento.times), // Postgres armazena JSON como string ou tipo JSONB
+            evento.criadoEm,
+            evento.atualizadoEm
         ];
 
         const res = await this.db.query(sql, params);
@@ -48,56 +37,48 @@ class PostgresEventoRepository extends IEventoRepository {
 
     async atualizar(evento) {
         const sql = `
-            UPDATE eventos_historico 
-            SET aberto = $1, status = $2, vencedor = $3
-            WHERE id = $4
+            UPDATE eventos 
+            SET status = $1, times = $2, vencedor = $3, atualizadoEm = $4
+            WHERE id = $5
         `;
         const params = [
-            evento.aberto ? 1 : 0,
             evento.status,
+            JSON.stringify(evento.times),
             evento.vencedor,
+            evento.atualizadoEm,
             evento.id
         ];
-        const res = await this.db.query(sql, params);
-        return res.rowCount > 0;
+
+        await this.db.query(sql, params);
+        return true;
     }
 
-    async finalizar(id) {
-        const res = await this.db.query(
-            'UPDATE eventos_historico SET status = $1 WHERE id = $2',
-            ['finalizado', id]
-        );
-        return res.rowCount > 0;
+    async buscarPorId(id) {
+        const res = await this.db.query('SELECT * FROM eventos WHERE id = $1', [id]);
+        if (res.rows.length === 0) return null;
+        return this._mapRowToEntity(res.rows[0]);
     }
 
-    async arquivar(id) {
-        const res = await this.db.query(
-            'UPDATE eventos_historico SET status = $1 WHERE id = $2',
-            ['arquivado', id]
-        );
-        return res.rowCount > 0;
-    }
-
-    async salvarHistorico(evento, totalArrecadado, totalPremios) {
-        return evento.id;
-    }
-
-    async listarHistorico(limite = 50) {
-        const res = await this.db.query('SELECT * FROM eventos_historico ORDER BY finalizadoEm DESC LIMIT $1', [limite]);
-        return res.rows;
+    async listarTodos() {
+        const res = await this.db.query('SELECT * FROM eventos ORDER BY criadoEm DESC');
+        return res.rows.map(row => this._mapRowToEntity(row));
     }
 
     _mapRowToEntity(row) {
+        // Tratamento robusto para JSON (se o banco retornar string ou objeto)
+        let timesObj = row.times;
+        if (typeof timesObj === 'string') {
+            try { timesObj = JSON.parse(timesObj); } catch(e) { timesObj = {}; }
+        }
+
         return new Evento({
             id: row.id,
-            codigo: row.codigo,
             nome: row.nome,
-            // Postgres retorna TEXT, então precisamos do JSON.parse igual no SQLite
-            times: typeof row.times === 'string' ? JSON.parse(row.times) : row.times,
-            aberto: row.aberto === 1 || row.aberto === true,
             status: row.status,
+            times: timesObj,
             vencedor: row.vencedor,
-            criadoEm: row.criadoem
+            criadoEm: row.criadoem || row.criadoEm,
+            atualizadoEm: row.atualizadoem || row.atualizadoEm
         });
     }
 }

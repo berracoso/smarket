@@ -1,92 +1,58 @@
-/**
- * Controller de Apostas
- * Gerencia apostas dos usuários
- */
-
 class ApostasController {
-    constructor(
-        criarApostaUseCase,
-        listarMinhasApostasUseCase,
-        calcularRetornoEstimadoUseCase,
-        obterHistoricoApostasUseCase
-    ) {
-        this.criarApostaUseCase = criarApostaUseCase;
-        this.listarMinhasApostasUseCase = listarMinhasApostasUseCase;
-        this.calcularRetornoEstimadoUseCase = calcularRetornoEstimadoUseCase;
-        this.obterHistoricoApostasUseCase = obterHistoricoApostasUseCase;
+    constructor(criarAposta, listarMinhasApostas, calcularRetornoEstimado) {
+        this.criarAposta = criarAposta;
+        this.listarMinhasApostas = listarMinhasApostas;
+        this.calcularRetornoEstimado = calcularRetornoEstimado;
     }
 
-    /**
-     * POST /apostas
-     * Cria nova aposta
-     */
     async criar(req, res, next) {
         try {
             const { time, valor } = req.body;
+            
+            // CORREÇÃO CRÍTICA: Pega o ID do token JWT (seguro)
+            // e não do body (inseguro)
+            const usuarioId = req.usuario.id;
 
-            const resultado = await this.criarApostaUseCase.executar({
-                userId: req.userId,
+            if (!time || !valor) {
+                return res.status(400).json({ erro: 'Time e valor são obrigatórios' });
+            }
+
+            const aposta = await this.criarAposta.executar({
+                usuarioId,
                 time,
                 valor
             });
 
-            res.status(201).json(resultado);
-        } catch (erro) {
-            next(erro);
-        }
-    }
-
-    /**
-     * GET /apostas/minhas
-     * Lista apostas do usuário no evento ativo
-     */
-    async minhas(req, res, next) {
-        try {
-            const resultado = await this.listarMinhasApostasUseCase.executar(req.userId);
-
-            res.json(resultado);
-        } catch (erro) {
-            next(erro);
-        }
-    }
-
-    /**
-     * GET /apostas/historico
-     * Lista histórico completo de apostas
-     */
-    async historico(req, res, next) {
-        try {
-            const { eventoId, dataInicio, dataFim, limite = 5, pagina = 1 } = req.query;
-
-            const resultado = await this.obterHistoricoApostasUseCase.executar({
-                userId: req.userId,
-                eventoId: eventoId ? parseInt(eventoId) : null,
-                dataInicio: dataInicio || null,
-                dataFim: dataFim || null,
-                limite: parseInt(limite),
-                pagina: parseInt(pagina)
+            res.status(201).json({
+                mensagem: 'Aposta realizada com sucesso',
+                aposta
             });
-
-            res.json(resultado);
         } catch (erro) {
             next(erro);
         }
     }
 
-    /**
-     * POST /apostas/simular
-     * Calcula retorno estimado de uma aposta
-     */
+    async minhasApostas(req, res, next) {
+        try {
+            // Pega ID do token
+            const usuarioId = req.usuario.id;
+            
+            const resultado = await this.listarMinhasApostas.executar({ usuarioId });
+            
+            res.status(200).json(resultado);
+        } catch (erro) {
+            next(erro);
+        }
+    }
+
     async simular(req, res, next) {
         try {
-            const { time, valor } = req.body;
-
-            const resultado = await this.calcularRetornoEstimadoUseCase.executar({
-                time,
-                valor
+            const { valor, time } = req.query;
+            const retorno = await this.calcularRetornoEstimado.executar({ 
+                valor: Number(valor), 
+                time 
             });
-
-            res.json(resultado);
+            res.status(200).json(retorno);
         } catch (erro) {
             next(erro);
         }

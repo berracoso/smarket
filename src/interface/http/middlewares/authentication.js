@@ -1,85 +1,49 @@
-/**
- * Middleware de Autenticação
- * Verifica se o usuário está autenticado via token JWT
- */
+const jwt = require('jsonwebtoken');
+
 class AuthenticationMiddleware {
     constructor(sessionManager) {
         this.sessionManager = sessionManager;
     }
 
-    /**
-     * Middleware para verificar autenticação (Bloqueia se inválido)
-     */
-    requireAuth() {
-        return (req, res, next) => {
-            try {
-                // 1. Tentar pegar do header Authorization
-                let token = req.headers['authorization'];
+    async handle(req, res, next) {
+        try {
+            const authHeader = req.headers.authorization;
 
-                // 2. Fallback para x-access-token
-                if (!token) {
-                    token = req.headers['x-access-token'];
-                }
-
-                // 3. Fallback para body
-                if (!token && req.body && req.body.token) {
-                    token = req.body.token;
-                }
-
-                // 4. Limpeza do prefixo "Bearer " se existir
-                if (token && token.startsWith('Bearer ')) {
-                    token = token.slice(7, token.length).trim();
-                }
-
-                // Se ainda não tiver token, retorna erro
-                if (!token) {
-                    return res.status(401).json({
-                        sucesso: false,
-                        erro: 'Token não fornecido. Faça login para continuar.',
-                        tipo: 'auth_required'
-                    });
-                }
-
-                // 5. Verificar validade do token
-                const decoded = this.sessionManager.verificarToken(token);
-                
-                // 6. Anexar dados do usuário à requisição
-                req.userId = decoded.id;     // Para compatibilidade
-                req.usuario = decoded;       // Objeto completo
-                
-                next();
-            } catch (err) {
-                return res.status(401).json({
-                    sucesso: false,
-                    erro: 'Sessão inválida ou expirada.',
-                    tipo: 'auth_required'
-                });
+            if (!authHeader) {
+                return res.status(401).json({ erro: 'Token não fornecido' });
             }
-        };
-    }
 
-    /**
-     * Middleware opcional - não bloqueia se falhar, apenas não popula o user
-     */
-    optionalAuth() {
-        return (req, res, next) => {
-            let token = req.headers['authorization'];
+            // O formato correto é "Bearer <token>"
+            const parts = authHeader.split(' ');
+            if (parts.length !== 2) {
+                return res.status(401).json({ erro: 'Erro no formato do token' });
+            }
+
+            const [scheme, token] = parts;
+
+            if (!/^Bearer$/i.test(scheme)) {
+                return res.status(401).json({ erro: 'Token malformatado' });
+            }
+
+            // Validação direta via JWT se o SessionManager for complexo demais, 
+            // ou usamos o SessionManager se ele apenas encapsular isso.
+            // Por segurança, vamos decodificar direto aqui para garantir compatibilidade.
+            const secret = process.env.JWT_SECRET || process.env.SESSION_SECRET;
+            if (!secret) {
+                throw new Error('JWT_SECRET não configurado no .env');
+            }
+
+            const decoded = jwt.verify(token, secret);
             
-            if (token && token.startsWith('Bearer ')) {
-                token = token.slice(7, token.length).trim();
-            }
+            // Injeta o usuário na requisição para os Controllers usarem
+            req.usuario = decoded; 
+            req.userId = decoded.id; // Atalho útil
 
-            if (token) {
-                try {
-                    const decoded = this.sessionManager.verificarToken(token);
-                    req.userId = decoded.id;
-                    req.usuario = decoded;
-                } catch (err) {
-                    // Ignora erro no opcional
-                }
-            }
-            next();
-        };
+            return next();
+        } catch (err) {
+            console.error('Erro de autenticação:', err.message);
+            return res.status(401).json({ erro: 'Token inválido ou expirado' });
+        }
     }
 }
 
