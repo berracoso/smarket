@@ -61,12 +61,24 @@ async function carregarDados() {
 
         atualizarInterface();
     } catch (error) {
-        mostrarAlerta('Erro ao carregar dados', 'error');
+        console.error(error);
+        mostrarAlerta('Erro ao carregar dados do servidor', 'error');
     }
 }
 
 function atualizarInterface() {
-    if (!resumoAtual) return;
+    // CORREÇÃO CRÍTICA: Se não houver evento, avisa o Admin visualmente na tela
+    if (!resumoAtual) {
+        const statusSection = document.getElementById('statusSection');
+        if (statusSection) {
+            statusSection.innerHTML = `
+                <div style="background: #fef3c7; color: #92400e; padding: 20px; border-radius: 8px; border: 2px dashed #fbbf24; width: 100%; text-align: center; font-size: 1.1em;">
+                    ⚠️ O banco de dados está vazio. <br><br> Nenhum evento ativo no momento. Clique no botão <b>"Novo Evento"</b> ou <b>"Reset"</b> para criar o primeiro evento e começar!
+                </div>`;
+        }
+        return; // Interrompe a atualização do resto pois não há dados
+    }
+
     atualizarStatus();
     atualizarApostas();
     atualizarUsuarios();
@@ -98,7 +110,6 @@ function atualizarStatus() {
     `;
     document.getElementById('statusSection').innerHTML = statusHTML;
 
-    // Busca botões de forma blindada pelo ID ou pelo texto visível neles
     const btnAbrir = document.getElementById('btnAbrir') || Array.from(document.querySelectorAll('button')).find(b => b.textContent.includes('Abrir'));
     const btnFechar = document.getElementById('btnFechar') || Array.from(document.querySelectorAll('button')).find(b => b.textContent.includes('Fechar'));
 
@@ -121,9 +132,7 @@ function atualizarApostas() {
         <div class="aposta-item">
             <div class="aposta-info">
                 <div class="nome">${aposta.nome || 'Usuário'}</div>
-                <div class="detalhes">
-                    ${aposta.time} • ${new Date(aposta.timestamp || aposta.criadoEm).toLocaleString('pt-BR')}
-                </div>
+                <div class="detalhes">${aposta.time} • ${new Date(aposta.timestamp || aposta.criadoEm).toLocaleString('pt-BR')}</div>
             </div>
             <div class="aposta-valor">R$ ${parseFloat(aposta.valor).toFixed(2)}</div>
         </div>
@@ -133,10 +142,7 @@ function atualizarApostas() {
 }
 
 function atualizarUsuarios() {
-    if (!usuariosLista || usuariosLista.length === 0) {
-        document.getElementById('usuariosContainer').innerHTML = '<p style="text-align: center; color: #999;">Carregando usuários...</p>';
-        return;
-    }
+    if (!usuariosLista || usuariosLista.length === 0) return;
 
     const usuariosHTML = usuariosLista.map(usuario => {
         const isSuperAdmin = usuario.isSuperAdmin;
@@ -180,7 +186,7 @@ function atualizarUsuarios() {
 async function promoverUsuario(userId, nome) {
     if (!confirm(`Promover ${nome} a Administrador?`)) return;
     try {
-        const response = await fetch(`${API_URL}/usuarios/${userId}/promover`, { method: 'POST' });
+        const response = await fetch(`${API_URL}/usuarios/${userId}/promover`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
         if (response.ok) { mostrarAlerta(`✅ Usuário promovido com sucesso!`, 'success'); await carregarDados(); }
     } catch (error) {}
 }
@@ -188,7 +194,7 @@ async function promoverUsuario(userId, nome) {
 async function rebaixarUsuario(userId, nome) {
     if (!confirm(`Rebaixar ${nome} para Usuário Comum?`)) return;
     try {
-        const response = await fetch(`${API_URL}/usuarios/${userId}/rebaixar`, { method: 'POST' });
+        const response = await fetch(`${API_URL}/usuarios/${userId}/rebaixar`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
         if (response.ok) { mostrarAlerta(`✅ Usuário rebaixado com sucesso!`, 'success'); await carregarDados(); }
     } catch (error) {}
 }
@@ -233,16 +239,24 @@ function mostrarAlerta(mensagem, tipo = 'success') {
     }
 }
 
+// CORREÇÃO CRÍTICA: Lendo o erro real do servidor e usando Headers
 async function abrirApostas() {
     try {
-        const response = await fetch(`${API_URL}/evento/abrir-fechar`, { method: 'POST' });
+        const response = await fetch(`${API_URL}/evento/abrir-fechar`, { 
+            method: 'POST', 
+            headers: { 'Content-Type': 'application/json' } 
+        });
+        
+        let data = {}; try { data = await response.json(); } catch(e){}
+
         if (response.ok) {
             mostrarAlerta('✅ Status alterado com sucesso!', 'success');
             await carregarDados();
         } else {
-            mostrarAlerta('Erro ao alterar status', 'error');
+            // Agora ele mostra o erro exato: "Nenhum evento ativo"
+            mostrarAlerta(data.erro || 'Erro ao alterar status', 'error');
         }
-    } catch (error) { mostrarAlerta('Erro de conexão', 'error'); }
+    } catch (error) { mostrarAlerta('Erro de conexão com o servidor', 'error'); }
 }
 
 async function fecharApostas() {
@@ -258,19 +272,37 @@ async function definirVencedor(time) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ time })
         });
-        if (response.ok) { mostrarAlerta(`🏆 Vencedor definido!`, 'success'); await carregarDados(); } 
-    } catch (error) {}
+        
+        let data = {}; try { data = await response.json(); } catch(e){}
+
+        if (response.ok) { 
+            mostrarAlerta(`🏆 Vencedor definido!`, 'success'); 
+            await carregarDados(); 
+        } else {
+            mostrarAlerta(data.erro || 'Erro ao definir vencedor', 'error');
+        }
+    } catch (error) { mostrarAlerta('Erro de conexão', 'error');}
 }
 
 async function resetarEvento() {
-    if (!confirm('🚨 ATENÇÃO: Isso apagará todas as apostas! Deseja continuar?')) return;
+    if (!confirm('🚨 ATENÇÃO: Deseja criar um NOVO EVENTO? Isso irá arquivar o atual e apagar as apostas da tela.')) return;
     try {
-        const response = await fetch(`${API_URL}/reset`, { method: 'POST' });
-        if (response.ok) { mostrarAlerta('🔄 Evento resetado!', 'success'); await carregarDados(); } 
-    } catch (error) {}
+        const response = await fetch(`${API_URL}/reset`, { 
+            method: 'POST', 
+            headers: { 'Content-Type': 'application/json' } 
+        });
+
+        let data = {}; try { data = await response.json(); } catch(e){}
+
+        if (response.ok) { 
+            mostrarAlerta('🔄 Novo evento criado com sucesso!', 'success'); 
+            await carregarDados(); 
+        } else {
+            mostrarAlerta(data.erro || 'Erro ao criar novo evento', 'error');
+        }
+    } catch (error) { mostrarAlerta('Erro de conexão', 'error'); }
 }
 
-// INICIALIZAÇÃO SEGURA
 document.addEventListener('DOMContentLoaded', () => {
     const btnLogout = document.getElementById('btnLogout');
     const btnAtualizar = document.getElementById('btnAtualizar');
@@ -278,7 +310,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (btnLogout) btnLogout.onclick = (e) => { e.preventDefault(); logout(); };
     if (btnAtualizar) btnAtualizar.onclick = (e) => { e.preventDefault(); carregarDados(); };
 
-    // Busca botões essenciais de forma dinâmica e substitui ações antigas (previne refresh e bugs)
     const btnAbrir = document.getElementById('btnAbrir') || Array.from(document.querySelectorAll('button')).find(b => b.textContent.includes('Abrir'));
     const btnFechar = document.getElementById('btnFechar') || Array.from(document.querySelectorAll('button')).find(b => b.textContent.includes('Fechar'));
     const btnReset = document.getElementById('btnReset') || document.getElementById('btnNovoEvento') || Array.from(document.querySelectorAll('button')).find(b => b.textContent.includes('Novo Evento') || b.textContent.includes('Reset'));
