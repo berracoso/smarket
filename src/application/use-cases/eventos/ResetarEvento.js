@@ -1,7 +1,6 @@
 /**
  * Use Case: Novo evento
- * 
- * Arquiva o evento atual e cria um novo evento automaticamente.
+ * * Arquiva o evento atual e cria um novo evento automaticamente.
  * Usado para iniciar um novo ciclo de apostas.
  */
 
@@ -20,7 +19,7 @@ class ResetarEvento {
      * @param {Object} dados - { userId, nome?, times }
      * @returns {Promise<Object>} { sucesso: true, novoEvento: {...} }
      */
-    async executar({ userId, nome = null, times }) {
+    async executar({ userId, nome = 'Novo Evento', times = ['Time A', 'Time B', 'Time C', 'Time D'] }) {
         // 1. Buscar usuário
         const usuario = await this.usuarioRepository.buscarPorId(userId);
         if (!usuario) {
@@ -40,10 +39,16 @@ class ResetarEvento {
             eventoAntigoId = eventoAtual.id;
             // Arquivar evento atual
             eventoAtual.arquivar();
-            await this.eventoRepository.atualizar(eventoAtual);
+            await this.eventoRepository.atualizar(eventoAtual); // mudou de salvar para atualizar? no sqlite.js tem salvar
+            // Se o repository for SQLiteEventoRepository, a funcao é salvar()
+            if(this.eventoRepository.salvar) {
+                 await this.eventoRepository.salvar(eventoAtual);
+            } else if (this.eventoRepository.atualizar) {
+                 await this.eventoRepository.atualizar(eventoAtual);
+            }
         }
 
-        // 4. Validar times do novo evento
+        // 4. Validar times do novo evento (agora usando os defaults)
         if (!times || !Array.isArray(times) || times.length < 2) {
             throw new Error('É necessário informar pelo menos 2 times');
         }
@@ -58,7 +63,13 @@ class ResetarEvento {
             times
         });
 
-        const novoEventoId = await this.eventoRepository.criar(novoEvento);
+        let novoEventoId;
+        if(this.eventoRepository.criar) {
+            novoEventoId = await this.eventoRepository.criar(novoEvento);
+        } else if (this.eventoRepository.salvar) {
+            await this.eventoRepository.salvar(novoEvento);
+            novoEventoId = novoEvento.id;
+        }
 
         return {
             sucesso: true,
