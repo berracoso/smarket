@@ -7,7 +7,10 @@ let usuarioLogado = null;
 async function verificarAuth() {
     try {
         const response = await fetch(`${API_URL}/auth/me`, {
-            headers: { 'Content-Type': 'application/json' }
+            headers: { 
+                'Content-Type': 'application/json',
+                'Accept': 'application/json' 
+            }
         });
 
         if (response.ok) {
@@ -27,7 +30,12 @@ async function verificarAuth() {
 }
 
 async function logout() {
-    try { await fetch(`${API_URL}/auth/logout`, { method: 'POST' }); } catch (error) {}
+    try { 
+        await fetch(`${API_URL}/auth/logout`, { 
+            method: 'POST',
+            headers: { 'Accept': 'application/json' }
+        }); 
+    } catch (error) {}
     localStorage.removeItem('token');
     localStorage.removeItem('usuario');
     window.location.href = '/login';
@@ -36,15 +44,15 @@ async function logout() {
 async function carregarDados() {
     try {
         const [resumoRes, dadosRes, usuariosRes] = await Promise.all([
-            fetch(`${API_URL}/eventos/ativo`), 
-            fetch(`${API_URL}/dados`),
-            fetch(`${API_URL}/usuarios`)
+            fetch(`${API_URL}/eventos/ativo`, { headers: { 'Accept': 'application/json' } }), 
+            fetch(`${API_URL}/dados`, { headers: { 'Accept': 'application/json' } }),
+            fetch(`${API_URL}/usuarios`, { headers: { 'Accept': 'application/json' } })
         ]);
 
         if (resumoRes.status === 404) {
-            const resumoLegacy = await fetch(`${API_URL}/resumo`);
-            resumoAtual = await resumoLegacy.json();
-        } else {
+            const resumoLegacy = await fetch(`${API_URL}/resumo`, { headers: { 'Accept': 'application/json' } });
+            if (resumoLegacy.ok) resumoAtual = await resumoLegacy.json();
+        } else if (resumoRes.ok) {
             const data = await resumoRes.json();
             resumoAtual = data.evento || data;
         }
@@ -52,6 +60,10 @@ async function carregarDados() {
         if (dadosRes.ok) {
             const dadosCompletos = await dadosRes.json();
             apostasAtual = dadosCompletos.apostas || [];
+            // Fallback caso /eventos/ativo falhe mas /dados funcione (rota legada)
+            if (!resumoAtual && dadosCompletos.evento) {
+                resumoAtual = dadosCompletos.evento;
+            }
         }
 
         if (usuariosRes.ok) {
@@ -67,7 +79,7 @@ async function carregarDados() {
 }
 
 function atualizarInterface() {
-    // CORREÇÃO CRÍTICA: Se não houver evento, avisa o Admin visualmente na tela
+    // Se não houver evento, avisa o Admin visualmente na tela
     if (!resumoAtual) {
         const statusSection = document.getElementById('statusSection');
         if (statusSection) {
@@ -186,17 +198,45 @@ function atualizarUsuarios() {
 async function promoverUsuario(userId, nome) {
     if (!confirm(`Promover ${nome} a Administrador?`)) return;
     try {
-        const response = await fetch(`${API_URL}/usuarios/${userId}/promover`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
-        if (response.ok) { mostrarAlerta(`✅ Usuário promovido com sucesso!`, 'success'); await carregarDados(); }
-    } catch (error) {}
+        const response = await fetch(`${API_URL}/usuarios/${userId}/promover`, { 
+            method: 'POST', 
+            headers: { 
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            } 
+        });
+        
+        let data = {}; try { data = await response.json(); } catch(e){}
+        
+        if (response.ok) { 
+            mostrarAlerta(`✅ Usuário promovido com sucesso!`, 'success'); 
+            await carregarDados(); 
+        } else {
+            mostrarAlerta(data.erro || data.error || 'Erro ao promover usuário', 'error');
+        }
+    } catch (error) { mostrarAlerta('Erro de conexão', 'error'); }
 }
 
 async function rebaixarUsuario(userId, nome) {
     if (!confirm(`Rebaixar ${nome} para Usuário Comum?`)) return;
     try {
-        const response = await fetch(`${API_URL}/usuarios/${userId}/rebaixar`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
-        if (response.ok) { mostrarAlerta(`✅ Usuário rebaixado com sucesso!`, 'success'); await carregarDados(); }
-    } catch (error) {}
+        const response = await fetch(`${API_URL}/usuarios/${userId}/rebaixar`, { 
+            method: 'POST', 
+            headers: { 
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            } 
+        });
+        
+        let data = {}; try { data = await response.json(); } catch(e){}
+
+        if (response.ok) { 
+            mostrarAlerta(`✅ Usuário rebaixado com sucesso!`, 'success'); 
+            await carregarDados(); 
+        } else {
+            mostrarAlerta(data.erro || data.error || 'Erro ao rebaixar usuário', 'error');
+        }
+    } catch (error) { mostrarAlerta('Erro de conexão', 'error'); }
 }
 
 function atualizarVencedor() {
@@ -239,12 +279,14 @@ function mostrarAlerta(mensagem, tipo = 'success') {
     }
 }
 
-// CORREÇÃO CRÍTICA: Lendo o erro real do servidor e usando Headers
 async function abrirApostas() {
     try {
         const response = await fetch(`${API_URL}/evento/abrir-fechar`, { 
             method: 'POST', 
-            headers: { 'Content-Type': 'application/json' } 
+            headers: { 
+                'Content-Type': 'application/json',
+                'Accept': 'application/json' // OBRIGATÓRIO: Força erro JSON se barrado pelo auth
+            } 
         });
         
         let data = {}; try { data = await response.json(); } catch(e){}
@@ -253,8 +295,8 @@ async function abrirApostas() {
             mostrarAlerta('✅ Status alterado com sucesso!', 'success');
             await carregarDados();
         } else {
-            // Agora ele mostra o erro exato: "Nenhum evento ativo"
-            mostrarAlerta(data.erro || 'Erro ao alterar status', 'error');
+            // Agora ele mostra o erro exato caso não esteja autorizado
+            mostrarAlerta(data.erro || data.error || 'Erro ao alterar status', 'error');
         }
     } catch (error) { mostrarAlerta('Erro de conexão com o servidor', 'error'); }
 }
@@ -269,7 +311,10 @@ async function definirVencedor(time) {
     try {
         const response = await fetch(`${API_URL}/vencedor`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            },
             body: JSON.stringify({ time })
         });
         
@@ -279,7 +324,7 @@ async function definirVencedor(time) {
             mostrarAlerta(`🏆 Vencedor definido!`, 'success'); 
             await carregarDados(); 
         } else {
-            mostrarAlerta(data.erro || 'Erro ao definir vencedor', 'error');
+            mostrarAlerta(data.erro || data.error || 'Erro ao definir vencedor', 'error');
         }
     } catch (error) { mostrarAlerta('Erro de conexão', 'error');}
 }
@@ -289,7 +334,10 @@ async function resetarEvento() {
     try {
         const response = await fetch(`${API_URL}/reset`, { 
             method: 'POST', 
-            headers: { 'Content-Type': 'application/json' } 
+            headers: { 
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            } 
         });
 
         let data = {}; try { data = await response.json(); } catch(e){}
@@ -298,7 +346,7 @@ async function resetarEvento() {
             mostrarAlerta('🔄 Novo evento criado com sucesso!', 'success'); 
             await carregarDados(); 
         } else {
-            mostrarAlerta(data.erro || 'Erro ao criar novo evento', 'error');
+            mostrarAlerta(data.erro || data.error || 'Erro ao criar novo evento', 'error');
         }
     } catch (error) { mostrarAlerta('Erro de conexão', 'error'); }
 }

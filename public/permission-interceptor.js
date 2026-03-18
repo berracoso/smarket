@@ -2,7 +2,8 @@
  * Permission Interceptor
  * Intercepta todas as requisições fetch para:
  * 1. Injetar o Token JWT automaticamente (Authorization Header)
- * 2. Validar permissões em tempo real (401/403)
+ * 2. Enviar os cookies de sessão corretamente (Credentials)
+ * 3. Validar permissões em tempo real (401/403)
  */
 
 (function () {
@@ -13,29 +14,38 @@
 
     // Sobrescrever fetch global
     window.fetch = async function (...args) {
-        // CORREÇÃO: Injeção do Token
         let [resource, config] = args;
         const token = localStorage.getItem('token');
 
-        if (token) {
-            if (!config) {
-                config = {};
+        if (!config) {
+            config = {};
+        }
+
+        // CORREÇÃO: Enviar cookies de sessão em todas as requisições para o backend validar
+        config.credentials = 'same-origin';
+
+        if (!config.headers) {
+            config.headers = {};
+        }
+        
+        // CORREÇÃO: Avisar o backend que somos uma API e esperamos JSON (evita redirecionamento HTML 302/200)
+        if (config.headers instanceof Headers) {
+            if (!config.headers.has('Accept')) {
+                config.headers.append('Accept', 'application/json');
             }
-            if (!config.headers) {
-                config.headers = {};
-            }
-            
-            // Adiciona o header Authorization
-            // Verifica se headers é um objeto simples ou Headers API
-            if (config.headers instanceof Headers) {
+            if (token) {
                 config.headers.append('Authorization', `Bearer ${token}`);
-            } else {
+            }
+        } else {
+            if (!config.headers['Accept']) {
+                config.headers['Accept'] = 'application/json';
+            }
+            if (token) {
                 config.headers['Authorization'] = `Bearer ${token}`;
             }
-            
-            args[1] = config;
         }
-        // FIM DA CORREÇÃO
+        
+        args[1] = config;
 
         try {
             const response = await originalFetch.apply(this, args);
@@ -66,7 +76,7 @@
                     // Tratar erro de permissão revogada (middle-check)
                     if (response.status === 403 && data.tipo === 'permission_revoked') {
                         if (window.showError) {
-                            window.showError(data.erro || 'Você não tem mais permissão para acessar esta área.', 7000);
+                            window.showError(data.erro || data.error || 'Você não tem mais permissão para acessar esta área.', 7000);
                         }
                         setTimeout(() => {
                             window.location.href = data.redirecionarPara || '/';
@@ -75,9 +85,9 @@
                     }
 
                     // Tratar erro de autenticação (mas não na página de login)
-                    if (response.status === 401 && data.tipo === 'auth_required' && !isLoginPage) {
+                    if (response.status === 401 && !isLoginPage) {
                         if (window.showWarning) {
-                            window.showWarning('Sessão expirada. Redirecionando para login...', 3000);
+                            window.showWarning('Sessão expirada ou não autorizada. Redirecionando para login...', 3000);
                         }
                         setTimeout(() => {
                             window.location.href = data.redirecionarPara || '/login';
@@ -86,8 +96,8 @@
                     }
 
                     // Outros erros
-                    if (data.erro && window.showError && !(isLoginPage && response.status === 401)) {
-                        window.showError(data.erro, 5000);
+                    if ((data.erro || data.error) && window.showError && !(isLoginPage && response.status === 401)) {
+                        window.showError(data.erro || data.error, 5000);
                     }
 
                 } catch (parseError) {
@@ -143,7 +153,7 @@
 })();
 
 // Auto-iniciar em admin
-if (window.location.pathname === '/admin') {
+if (window.location.pathname === '/admin' || window.location.pathname === '/admin.html') {
     setTimeout(() => {
         if (window.startPermissionCheck) window.startPermissionCheck(30000);
     }, 1000);
