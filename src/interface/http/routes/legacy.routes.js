@@ -5,10 +5,14 @@ const getDbConnection = require('../../../infrastructure/database/sqlite');
 module.exports = (apostasController, eventosController, authMiddleware) => {
     const router = express.Router();
 
-    // Proteção de Rota segura (evita o crash de undefined do middleware)
-    const protegerRota = typeof authMiddleware.requireAuth === 'function' 
-        ? authMiddleware.requireAuth 
-        : (req, res, next) => next();
+    // --- CORREÇÃO DE SEGURANÇA E CONTEXTO ---
+    // O express perde o "this" da classe. O bind() garante que o middleware de sessão funcione sem crachar
+    const protegerRota = (req, res, next) => {
+        if (authMiddleware && typeof authMiddleware.requireAuth === 'function') {
+            return authMiddleware.requireAuth.bind(authMiddleware)(req, res, next);
+        }
+        return next();
+    };
 
     // ==========================================
     // 1. CARREGAR DADOS GERAIS (Painel Admin)
@@ -22,7 +26,6 @@ module.exports = (apostasController, eventosController, authMiddleware) => {
                 return res.json({ evento: null, apostas: [] });
             }
 
-            // O SQLite salva os times como Array String, mas o frontend Admin espera um Objeto com percentuais
             let timesRaw = [];
             try { timesRaw = JSON.parse(evento.times); } catch(e){}
 
@@ -95,7 +98,6 @@ module.exports = (apostasController, eventosController, authMiddleware) => {
             
             if (!evento) return res.status(400).json({ erro: 'Nenhum evento ativo' });
 
-            // Inverte o status atual (se 1 vira 0, se 0 vira 1)
             const novoStatus = evento.aberto ? 0 : 1; 
             await db.run("UPDATE eventos SET aberto = ? WHERE id = ?", [novoStatus, evento.id]);
             
@@ -141,11 +143,9 @@ module.exports = (apostasController, eventosController, authMiddleware) => {
             if (!evento) return res.status(400).json({ erro: 'Nenhum evento ativo' });
             if (evento.aberto) return res.status(400).json({ erro: '⚠️ Feche as apostas antes de definir vencedor' });
 
-            // Define o vencedor e finaliza o evento
             await db.run("UPDATE eventos SET vencedor = ?, status = 'finalizado', finalizadoEm = ? WHERE id = ?", 
                 [timeVencedor, new Date().toISOString(), evento.id]);
 
-            // Busca apostas para gerar o cálculo de premiação
             const apostas = await db.all("SELECT * FROM apostas WHERE eventoId = ?", [evento.id]);
             
             let totalGeral = 0;
@@ -155,7 +155,7 @@ module.exports = (apostasController, eventosController, authMiddleware) => {
                 if (a.time === timeVencedor) totalVencedor += a.valor;
             });
 
-            const taxaPlataforma = totalGeral * 0.05; // 5% de taxa
+            const taxaPlataforma = totalGeral * 0.05; 
             const totalPremio = totalGeral - taxaPlataforma;
 
             const vencedores = apostas
@@ -185,10 +185,8 @@ module.exports = (apostasController, eventosController, authMiddleware) => {
         try {
             const db = await getDbConnection();
             
-            // 1. Arquiva o evento ativo atual (esconde as apostas dele do dashboard principal)
             await db.run("UPDATE eventos SET status = 'arquivado' WHERE status = 'ativo'");
 
-            // 2. Cria um evento novinho em folha
             const id = crypto.randomUUID();
             const times = JSON.stringify(['Time A', 'Time B', 'Time C', 'Time D']); 
             
