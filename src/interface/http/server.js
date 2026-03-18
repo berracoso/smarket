@@ -1,4 +1,4 @@
-require('dotenv').config(); // Garante que as variáveis de ambiente carreguem
+require('dotenv').config(); 
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -11,18 +11,16 @@ const errorHandler = require('./middlewares/error-handler');
 
 const app = express();
 
-// Configuração para o Render (Trust Proxy)
 app.set('trust proxy', 1);
 
-// Segurança e JSON
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors());
 app.use(express.json());
 
-// --- CORREÇÃO DO LOCK DE BANCO DE DADOS ---
+// --- CORREÇÃO: Banco de sessões separado para evitar "Database is Locked" ---
 app.use(session({
   store: new SQLiteStore({
-    db: 'sessions.db', // <-- CORREÇÃO: Usar um arquivo separado apenas para as sessões de login
+    db: 'sessions.db', // <-- Usa um banco exclusivo para logins
     dir: path.join(process.cwd()) 
   }),
   secret: process.env.SESSION_SECRET || 'segredo_super_secreto_smarket_2026',
@@ -31,15 +29,13 @@ app.use(session({
   cookie: {
     secure: process.env.NODE_ENV === 'production', 
     httpOnly: true,
-    maxAge: 30 * 24 * 60 * 60 * 1000 // 30 dias
+    maxAge: 30 * 24 * 60 * 60 * 1000 
   }
 }));
 
-// Define a pasta public como estática
 const publicPath = path.join(process.cwd(), 'public');
 app.use(express.static(publicPath));
 
-// Rate Limit
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 100,
@@ -48,22 +44,16 @@ const limiter = rateLimit({
 });
 app.use(limiter);
 
-// Rotas da API
-app.use(routes);
+app.use(routes); // Aqui ele carrega o nosso index.js corrigido
 
-// --- ROTAS DO FRONTEND ---
-
-// 1. Rota de Login
 app.get('/login', (req, res) => {
     res.sendFile(path.join(publicPath, 'login.html'));
 });
 
-// 2. Rota de Admin
 app.get('/admin', (req, res) => {
     res.sendFile(path.join(publicPath, 'admin.html'));
 });
 
-// 3. Catch-all (SPA)
 app.get('*', (req, res, next) => {
   if (req.url.startsWith('/auth') || req.url.startsWith('/apostas') || req.url.startsWith('/eventos')) {
     return next();
