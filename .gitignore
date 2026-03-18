@@ -5,6 +5,10 @@ node_modules/
 calculo-apostas.md
 
 # Banco de dados SQLite
+*.db
+*.sqlite
+smarket.db
+sessions.db
 bolao.db
 server-old.js
 
