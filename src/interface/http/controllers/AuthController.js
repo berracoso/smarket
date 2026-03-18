@@ -9,11 +9,11 @@ class AuthController {
             const { email, senha } = req.body;
             const resultado = await this.fazerLogin.executar({ email, senha });
             
-            // Salva na sessão do Postgres (connect-pg-simple)
+            // Salva na sessão do SQLite
             req.session.user = {
                 id: resultado.usuario.id,
                 nome: resultado.usuario.nome,
-                email: resultado.usuario.email.endereco,
+                email: resultado.usuario.email, // <-- Correção: Removido o ".endereco"
                 tipo: resultado.usuario.tipo,
                 isAdmin: resultado.usuario.isAdmin,
                 isSuperAdmin: resultado.usuario.isSuperAdmin
@@ -49,10 +49,10 @@ class AuthController {
     }
 
     async me(req, res, next) {
-        if (!req.user) {
+        if (!req.user && !req.session?.user) {
             return res.status(401).json({ error: 'Não autenticado' });
         }
-        res.json(req.user);
+        res.json(req.user || req.session.user);
     }
 }
 

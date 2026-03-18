@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const Usuario = require('../../domain/entities/Usuario');
 
 class SQLiteUsuarioRepository {
@@ -5,8 +6,33 @@ class SQLiteUsuarioRepository {
         this.dbPromise = dbPromise; // Promessa da conexão
     }
 
+    async criar(usuario) {
+        const db = await this.dbPromise();
+        
+        // SQLite não gera UUID sozinho, então geramos aqui se não existir
+        if (!usuario.id) {
+            usuario.id = crypto.randomUUID();
+        }
+
+        await db.run(
+            `INSERT INTO usuarios (id, nome, email, senha, isAdmin, isSuperAdmin, tipo, criadoEm) 
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+                usuario.id, usuario.nome, usuario.email.toString(), usuario.senha.toString(), 
+                usuario.isAdmin ? 1 : 0, usuario.isSuperAdmin ? 1 : 0, usuario.tipo, usuario.criadoEm
+            ]
+        );
+
+        return usuario.id;
+    }
+
     async salvar(usuario) {
         const db = await this.dbPromise();
+        
+        if (!usuario.id) {
+            usuario.id = crypto.randomUUID();
+        }
+
         await db.run(
             `INSERT INTO usuarios (id, nome, email, senha, isAdmin, isSuperAdmin, tipo, criadoEm) 
              VALUES (?, ?, ?, ?, ?, ?, ?, ?)
