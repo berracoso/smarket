@@ -1,8 +1,7 @@
 /**
  * Entity: Evento
  * Representa um evento de apostas
- * 
- * Status Possíveis:
+ * * Status Possíveis:
  * - ativo: Evento atual, pode ou não estar aberto para apostas
  * - finalizado: Evento encerrado com vencedor definido
  * - arquivado: Evento antigo, movido para histórico
@@ -101,6 +100,7 @@ class Evento {
 
     arquivar() {
         this.status = 'arquivado';
+        this.aberto = false; // <-- CORREÇÃO: Garante que o evento será fechado ao arquivar
         if (!this.finalizadoEm) {
             this.finalizadoEm = new Date().toISOString();
         }

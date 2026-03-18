@@ -36,11 +36,21 @@ class SQLiteEventoRepository {
     }
 
     _mapToEntity(row) {
+        let timesArray = [];
+        
+        // CORREÇÃO: Try/Catch adicionado para evitar crash no JSON.parse
+        try {
+            timesArray = row.times ? JSON.parse(row.times) : [];
+        } catch (error) {
+            console.error(`Erro ao fazer parse dos times do evento ${row.id}:`, error);
+            timesArray = []; 
+        }
+
         return new Evento({
             id: row.id,
             codigo: row.codigo,
             nome: row.nome,
-            times: JSON.parse(row.times), // Parseando o JSON de volta para Array
+            times: timesArray,
             aberto: Boolean(row.aberto),
             vencedor: row.vencedor,
             status: row.status,
