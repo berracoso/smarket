@@ -1,6 +1,6 @@
 const API_URL = '';
 
-// Helper para headers com autenticação
+// Helper para headers
 function getAuthHeaders() {
     const token = localStorage.getItem('token');
     const headers = {
@@ -59,22 +59,26 @@ async function handleLogin(event) {
         const data = await response.json();
 
         if (response.ok) {
-            if (data.token) {
-                localStorage.setItem('token', data.token);
-                // Salvar dados básicos do usuário também ajuda na UI
-                localStorage.setItem('usuario', JSON.stringify(data.usuario));
-            }
-
-            mostrarAlerta(`✅ Bem-vindo, ${data.usuario.nome}!`, 'success');
+            // CORREÇÃO: O backend retorna "user" na resposta da sessão
+            const usuario = data.user || data.usuario;
             
-            // Pequeno delay para o usuário ler a mensagem
-            setTimeout(() => {
-                if (data.usuario.isAdmin) {
-                    window.location.href = '/admin';
-                } else {
-                    window.location.href = '/';
-                }
-            }, 1000);
+            if (usuario) {
+                // Guarda os dados básicos do usuário para o front
+                localStorage.setItem('usuario', JSON.stringify(usuario));
+                mostrarAlerta(`✅ Bem-vindo, ${usuario.nome}!`, 'success');
+                
+                // Delay para o redirecionamento
+                setTimeout(() => {
+                    if (usuario.isAdmin || usuario.isSuperAdmin) {
+                        window.location.href = '/admin';
+                    } else {
+                        window.location.href = '/';
+                    }
+                }, 1000);
+            } else {
+                mostrarAlerta(`✅ Login realizado com sucesso!`, 'success');
+                setTimeout(() => window.location.href = '/', 1000);
+            }
         } else {
             const msgErro = data.mensagem || data.erro || 'Erro ao fazer login';
             mostrarAlerta(msgErro, 'error');
@@ -84,7 +88,7 @@ async function handleLogin(event) {
             }
         }
     } catch (error) {
-        console.error(error);
+        console.error('Erro no catch do login:', error);
         mostrarAlerta('Erro de conexão com o servidor', 'error');
         if (btnLogin) {
             btnLogin.disabled = false;
@@ -107,7 +111,8 @@ async function handleRegistro(event) {
     }
 
     try {
-        const response = await fetch(`${API_URL}/auth/registro`, {
+        // CORREÇÃO: A rota correta no backend é /register
+        const response = await fetch(`${API_URL}/auth/register`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ nome, email, senha })
@@ -116,15 +121,18 @@ async function handleRegistro(event) {
         const data = await response.json();
 
         if (response.ok) {
-            if (data.token) {
-                localStorage.setItem('token', data.token);
-                localStorage.setItem('usuario', JSON.stringify(data.usuario));
-            }
-
-            mostrarAlerta(`✅ Conta criada! Bem-vindo, ${data.usuario.nome}!`, 'success');
+            // CORREÇÃO: O backend só retorna a mensagem de sucesso na criação, então direcionamos para o login
+            mostrarAlerta(`✅ Conta criada com sucesso! Faça login para entrar.`, 'success');
             setTimeout(() => {
-                window.location.href = '/';
-            }, 1000);
+                switchTab('login', document.querySelector('.tab:first-child'));
+                document.getElementById('loginEmail').value = email;
+                document.getElementById('loginSenha').focus();
+                
+                if (btnRegistro) {
+                    btnRegistro.disabled = false;
+                    btnRegistro.textContent = 'Criar Conta';
+                }
+            }, 1500);
         } else {
             const msgErro = data.mensagem || data.erro || 'Erro ao criar conta';
             mostrarAlerta(msgErro, 'error');
@@ -134,7 +142,7 @@ async function handleRegistro(event) {
             }
         }
     } catch (error) {
-        console.error(error);
+        console.error('Erro no catch do registro:', error);
         mostrarAlerta('Erro de conexão com o servidor', 'error');
         if (btnRegistro) {
             btnRegistro.disabled = false;
@@ -144,14 +152,8 @@ async function handleRegistro(event) {
 }
 
 async function verificarSessao() {
-    const token = localStorage.getItem('token');
-    
-    // Se não tem token e estamos na página de login, tudo bem.
-    // Se não tem token e estamos em rota protegida, redirecionar (lógica deve estar no script da página protegida, não aqui).
-    if (!token) return;
-
     try {
-        // CORREÇÃO CRÍTICA: Adicionado headers com Authorization
+        // Agora o AuthController usa Cookies, então o navegador envia a sessão automaticamente
         const response = await fetch(`${API_URL}/auth/me`, {
             method: 'GET',
             headers: getAuthHeaders()
@@ -159,24 +161,24 @@ async function verificarSessao() {
 
         if (response.ok) {
             const data = await response.json();
-            // Se o usuário tentar acessar login estando logado, redireciona
+            const usuario = data.user || data;
+            
+            if (usuario) {
+                localStorage.setItem('usuario', JSON.stringify(usuario));
+            }
+
+            // Se estiver na página de login e estiver logado, redireciona
             if (window.location.pathname.includes('login') || window.location.pathname === '/') {
-                 if (data.isAdmin) {
+                 if (usuario.isAdmin || usuario.isSuperAdmin) {
                     window.location.href = '/admin';
                 } else {
-                    // Já está na home ou vai pra home
                     if (window.location.pathname.includes('login')) window.location.href = '/';
                 }
             }
         } else {
-            // Token inválido ou expirado
-            console.warn('Sessão inválida, limpando dados.');
+            // Limpa rastros se a sessão for inválida
             localStorage.removeItem('token');
             localStorage.removeItem('usuario');
-            // Só redireciona se NÃO estiver no login para evitar loop
-            if (!window.location.pathname.includes('login')) {
-                window.location.href = '/login';
-            }
         }
     } catch (error) {
         console.error('Erro ao verificar sessão', error);
@@ -200,7 +202,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const registroFormElement = document.querySelector('#registroForm form');
     if (registroFormElement) registroFormElement.addEventListener('submit', handleRegistro);
 
-    // Só chama verificarSessao se estivermos na página de login para auto-redirect
-    // OU se este script for compartilhado globalmente.
+    // Verifica a sessão ao carregar a página
     verificarSessao();
 });
