@@ -4,38 +4,27 @@ let resumoAtual = null;
 let usuarioAtual = null;
 let paginaAtual = 1;
 
-// --- HELPER: Cabeçalhos de Autenticação (A Mágica acontece aqui) ---
+// --- HELPER: Cabeçalhos de Autenticação (Agora usa Cookies automaticamente) ---
 function getAuthHeaders() {
-    const token = localStorage.getItem('token');
     return {
-        'Content-Type': 'application/json',
-        'Authorization': token ? `Bearer ${token}` : ''
+        'Content-Type': 'application/json'
     };
 }
 
-// Verificar autenticação
+// Verificar autenticação via Sessão
 async function verificarAuth() {
     try {
-        const token = localStorage.getItem('token');
-        if (!token) {
-            // Se não tem token, nem tenta conectar, manda pro login direto
-            window.location.href = '/login';
-            return;
-        }
-
         console.log('🔄 Verificando autenticação...');
         
-        // CORREÇÃO: Adicionado headers com o Token
         const response = await fetch(`${API_URL}/auth/me`, {
             method: 'GET',
             headers: getAuthHeaders()
         });
 
-        // Verifica se a resposta é JSON
         const contentType = response.headers.get('content-type');
         if (!contentType || !contentType.includes('application/json')) {
             if (response.status === 401 || response.status === 403) {
-                console.warn('🔒 Token expirado ou inválido.');
+                console.warn('🔒 Sessão não encontrada ou expirada.');
                 logout();
                 return;
             }
@@ -44,21 +33,18 @@ async function verificarAuth() {
 
         if (response.ok) {
             const data = await response.json();
-            usuarioAtual = { ...data }; // Garante que pegamos os dados planos retornados pelo controller
-            
-            // Se o controller retornar dentro de um objeto "usuario", ajustamos
-            if (data.usuario) usuarioAtual = data.usuario;
+            // Pega o usuário do payload (funciona com .user ou direto)
+            usuarioAtual = data.user || data.usuario || data; 
 
             console.log('✅ Usuário autenticado:', usuarioAtual.nome);
             atualizarInterfaceUsuario();
-            carregarConta(); // Preenche a aba "Minha Conta"
+            carregarConta(); 
             
-            // Se estiver na aba "Minhas Apostas", carrega elas
-            if (document.getElementById('secaoMinhasApostas').classList.contains('active')) {
+            if (document.getElementById('secaoMinhasApostas')?.classList.contains('active')) {
                 carregarMinhasApostas();
             }
         } else {
-            console.warn('🔒 Sessão inválida (401), redirecionando...');
+            console.warn('🔒 Usuário não autenticado (401), redirecionando...');
             logout();
         }
     } catch (error) {
@@ -107,7 +93,6 @@ function mostrarSecao(secao) {
     document.querySelectorAll('.section-content').forEach(s => s.classList.remove('active'));
     document.querySelectorAll('.menu-item').forEach(m => m.classList.remove('active'));
 
-    // Mapeamento de menus
     const mapaMenus = {
         'apostas': 'menuApostas',
         'minhas-apostas': 'menuMinhasApostas',
@@ -129,7 +114,6 @@ function mostrarSecao(secao) {
         document.getElementById(mapaMenus[secao]).classList.add('active');
     }
 
-    // Ações específicas ao abrir a aba
     if (secao === 'minhas-apostas') {
         carregarMinhasApostas();
     } else if (secao === 'historico') {
@@ -144,16 +128,9 @@ function mostrarSecao(secao) {
 // Carregar minhas apostas
 async function carregarMinhasApostas() {
     try {
-        // CORREÇÃO: Adicionado headers
-        const response = await fetch(`${API_URL}/apostas/minhas`, { // Ajuste de rota se necessário, ou /minhas-apostas
+        const response = await fetch(`${API_URL}/apostas/minhas`, {
             headers: getAuthHeaders()
         });
-
-        // Tenta rota alternativa se a primeira falhar (compatibilidade legado)
-        if (response.status === 404) {
-             const responseLegacy = await fetch(`${API_URL}/minhas-apostas`, { headers: getAuthHeaders() });
-             if (responseLegacy.ok) return processarApostas(await responseLegacy.json());
-        }
 
         if (response.ok) {
             const data = await response.json();
@@ -169,7 +146,6 @@ async function carregarMinhasApostas() {
 }
 
 function processarApostas(data) {
-    // Verifica se data é array ou objeto { apostas: [] }
     const listaApostas = Array.isArray(data) ? data : (data.apostas || []);
     const valorTotal = data.valorTotal || listaApostas.reduce((acc, curr) => acc + parseFloat(curr.valor), 0);
     const totalCount = data.total || listaApostas.length;
@@ -261,42 +237,35 @@ function carregarConta() {
 
     document.getElementById('contaContainer').innerHTML = contaHTML;
     
-    // Re-attach event listener
     setTimeout(() => {
         const btn = document.querySelector('.btn-logout-conta');
         if(btn) btn.addEventListener('click', logout);
     }, 100);
 }
 
-// Logout
-function logout() {
+// Logout corrigido para chamar a API e matar a sessão
+async function logout() {
+    try {
+        await fetch(`${API_URL}/auth/logout`, {
+            method: 'POST',
+            headers: getAuthHeaders()
+        });
+    } catch(e) { console.error('Erro no logout', e); }
+    
     localStorage.removeItem('token');
     localStorage.removeItem('usuario');
     window.location.href = '/login';
 }
 
-// Carregar resumo inicial (Público ou Privado)
+// Carregar resumo inicial
 async function carregarResumo() {
     try {
-        // Envia token se tiver, mas não falha se não tiver
         const response = await fetch(`${API_URL}/eventos/ativo`, {
              headers: getAuthHeaders()
         });
         
-        // Se a rota antiga /resumo ainda existir, trate o erro 404
-        if (response.status === 404) {
-             console.log('Tentando rota legada /resumo...');
-             const responseLegacy = await fetch(`${API_URL}/resumo`, { headers: getAuthHeaders() });
-             if (responseLegacy.ok) {
-                 resumoAtual = await responseLegacy.json();
-                 atualizarInterface();
-             }
-             return;
-        }
-
         if (response.ok) {
             const data = await response.json();
-            // Adaptação: O novo controller retorna { evento: ... }, o antigo retornava o resumo direto
             resumoAtual = data.evento || data; 
             atualizarInterface();
         }
@@ -308,9 +277,8 @@ async function carregarResumo() {
 // Atualizar interface com dados do resumo
 function atualizarInterface() {
     if(!resumoAtual) return;
-    const evento = resumoAtual; // Alias
+    const evento = resumoAtual;
 
-    // Suporte a estrutura antiga e nova
     const times = evento.times || {}; 
     const temTimes = Object.keys(times).length > 0;
     const estaAberto = evento.status === 'aberto' || evento.aberto === true;
@@ -351,12 +319,11 @@ function atualizarInterface() {
         timesGrid.innerHTML = timesHTML;
     }
 
-    // Attach click events
     if (temTimes) {
         document.querySelectorAll('.time-option').forEach(el => {
             el.addEventListener('click', () => {
                 timeSelecionado = el.dataset.time;
-                atualizarInterface(); // Re-render para mostrar seleção
+                atualizarInterface();
                 calcularRetorno();
             });
         });
@@ -387,9 +354,6 @@ function calcularRetorno() {
         return;
     }
 
-    // Lógica simples de estimativa no frontend (O backend que decide o valor real)
-    // Se quiser replicar a lógica do backend: (Valor / TotalTimeComAposta) * TotalGeralComAposta * 0.95
-    // Por enquanto, apenas mostra placeholder ou busca do backend se tiver endpoint de simulação
     retornoContainer.innerHTML = `
         <div class="retorno-estimado">
             <div class="label">Valor da aposta</div>
@@ -414,26 +378,13 @@ function mostrarAlerta(mensagem, tipo = 'success') {
     }, 5000);
 }
 
-// ==================== HISTÓRICO E ESTATÍSTICAS ====================
-// (Implementação simplificada para economizar espaço, segue a mesma lógica do Auth Headers)
-
-async function carregarEstatisticas() {
-    // Implementar fetch com getAuthHeaders()
-}
-
-async function carregarEventosFiltro() {
-     // Implementar fetch com getAuthHeaders()
-}
-
-async function carregarHistorico(pagina = 1) {
-    // Implementar fetch com getAuthHeaders()
-    // A lógica é igual à original, apenas adicionando headers: getAuthHeaders() no fetch
-}
+async function carregarEstatisticas() {}
+async function carregarEventosFiltro() {}
+async function carregarHistorico(pagina = 1) {}
 
 // ==================== INICIALIZAÇÃO ====================
 
 document.addEventListener('DOMContentLoaded', () => {
-    // Listeners de Menu
     const menuApostas = document.getElementById('menuApostas');
     const menuMinhasApostas = document.getElementById('menuMinhasApostas');
     const menuConta = document.getElementById('menuConta');
@@ -446,7 +397,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (menuAdmin) menuAdmin.addEventListener('click', () => window.location.href = '/admin');
     if (btnLogout) btnLogout.addEventListener('click', logout);
 
-    // Form de Aposta
     const apostaForm = document.getElementById('apostaForm');
     if (apostaForm) {
         apostaForm.addEventListener('submit', async (e) => {
@@ -457,7 +407,6 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!valor || valor <= 0) return mostrarAlerta('Valor inválido', 'error');
 
             try {
-                // CORREÇÃO: Headers no POST da aposta
                 const response = await fetch(`${API_URL}/apostas`, {
                     method: 'POST',
                     headers: getAuthHeaders(),

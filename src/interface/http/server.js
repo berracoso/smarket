@@ -4,7 +4,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const session = require('express-session'); 
-const SQLiteStore = require('connect-sqlite3')(session); // <-- Alterado: Usa SQLite para a sessão
+const SQLiteStore = require('connect-sqlite3')(session); 
 const path = require('path');
 const routes = require('./routes');
 const errorHandler = require('./middlewares/error-handler');
@@ -19,17 +19,17 @@ app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors());
 app.use(express.json());
 
-// --- CORREÇÃO DO LOGIN QUE DESAPARECE (Agora com SQLite) ---
+// --- CORREÇÃO DO LOCK DE BANCO DE DADOS ---
 app.use(session({
   store: new SQLiteStore({
-    db: 'smarket.db', // Salva as sessões no mesmo arquivo do seu banco
-    dir: path.join(process.cwd()) // Pasta raiz do projeto
+    db: 'sessions.db', // <-- CORREÇÃO: Usar um arquivo separado apenas para as sessões de login
+    dir: path.join(process.cwd()) 
   }),
   secret: process.env.SESSION_SECRET || 'segredo_super_secreto_smarket_2026',
   resave: false,
   saveUninitialized: false,
   cookie: {
-    secure: process.env.NODE_ENV === 'production', // True se estiver em produção (HTTPS)
+    secure: process.env.NODE_ENV === 'production', 
     httpOnly: true,
     maxAge: 30 * 24 * 60 * 60 * 1000 // 30 dias
   }

@@ -1,7 +1,6 @@
 /**
  * Use Case: Fazer Login
- * 
- * Orquestra o processo de autenticação:
+ * * Orquestra o processo de autenticação:
  * 1. Valida email
  * 2. Busca usuário no banco
  * 3. Compara senha fornecida com hash armazenado
@@ -32,7 +31,12 @@ class FazerLogin {
         }
 
         // 3. Validar senha
-        const senhaValida = await this.bcryptHasher.compare(senha, usuario.senha);
+        // CORREÇÃO CRÍTICA: Garante que o hash do banco seja uma String pura e não um Objeto
+        const hashArmazenado = typeof usuario.senha === 'object' && usuario.senha !== null 
+            ? usuario.senha.toString() 
+            : String(usuario.senha);
+
+        const senhaValida = await this.bcryptHasher.compare(senha, hashArmazenado);
         if (!senhaValida) {
             throw new Error('Credenciais inválidas');
         }
