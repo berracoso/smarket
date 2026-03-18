@@ -2,41 +2,24 @@ const API_URL = '';
 let timeSelecionado = null;
 let resumoAtual = null;
 let usuarioAtual = null;
-let paginaAtual = 1;
 
-// --- HELPER: Cabeçalhos de Autenticação (Agora usa Cookies automaticamente) ---
 function getAuthHeaders() {
     return {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
     };
 }
 
-// Verificar autenticação via Sessão
 async function verificarAuth() {
     try {
-        console.log('🔄 Verificando autenticação...');
-        
         const response = await fetch(`${API_URL}/auth/me`, {
             method: 'GET',
             headers: getAuthHeaders()
         });
 
-        const contentType = response.headers.get('content-type');
-        if (!contentType || !contentType.includes('application/json')) {
-            if (response.status === 401 || response.status === 403) {
-                console.warn('🔒 Sessão não encontrada ou expirada.');
-                logout();
-                return;
-            }
-            throw new Error(`Resposta inválida do servidor: ${response.status}`);
-        }
-
         if (response.ok) {
             const data = await response.json();
-            // Pega o usuário do payload (funciona com .user ou direto)
             usuarioAtual = data.user || data.usuario || data; 
-
-            console.log('✅ Usuário autenticado:', usuarioAtual.nome);
             atualizarInterfaceUsuario();
             carregarConta(); 
             
@@ -44,17 +27,13 @@ async function verificarAuth() {
                 carregarMinhasApostas();
             }
         } else {
-            console.warn('🔒 Usuário não autenticado (401), redirecionando...');
             logout();
         }
     } catch (error) {
-        console.error('❌ Erro crítico na autenticação:', error);
-        const userName = document.getElementById('userName');
-        if (userName) userName.innerHTML = '⚠️ Erro de Conexão';
+        console.error('Erro na autenticação:', error);
     }
 }
 
-// Função auxiliar para atualizar a UI baseada no usuário
 function atualizarInterfaceUsuario() {
     const menuAdmin = document.getElementById('menuAdmin');
     const apostaCard = document.getElementById('apostaCard');
@@ -62,7 +41,6 @@ function atualizarInterfaceUsuario() {
     const superAdminAlertMinhas = document.getElementById('superAdminAlertMinhas');
     const userName = document.getElementById('userName');
 
-    // Resetar visibilidade
     if (menuAdmin) menuAdmin.style.display = 'none';
     if (superAdminAlert) superAdminAlert.style.display = 'none';
     if (superAdminAlertMinhas) superAdminAlertMinhas.style.display = 'none';
@@ -70,12 +48,10 @@ function atualizarInterfaceUsuario() {
 
     if (!usuarioAtual) return;
 
-    // Lógica de Admin
     if (usuarioAtual.isAdmin || usuarioAtual.isSuperAdmin) {
         if (menuAdmin) menuAdmin.style.display = 'flex';
     }
 
-    // Lógica de Super Admin
     if (usuarioAtual.isSuperAdmin) {
         if (apostaCard) apostaCard.style.display = 'none';
         if (superAdminAlert) superAdminAlert.style.display = 'block';
@@ -88,7 +64,6 @@ function atualizarInterfaceUsuario() {
     }
 }
 
-// Mostrar seção
 function mostrarSecao(secao) {
     document.querySelectorAll('.section-content').forEach(s => s.classList.remove('active'));
     document.querySelectorAll('.menu-item').forEach(m => m.classList.remove('active'));
@@ -107,40 +82,23 @@ function mostrarSecao(secao) {
         'conta': 'secaoConta'
     };
 
-    if (mapaSecoes[secao]) {
-        document.getElementById(mapaSecoes[secao]).classList.add('active');
-    }
-    if (mapaMenus[secao]) {
-        document.getElementById(mapaMenus[secao]).classList.add('active');
-    }
+    if (mapaSecoes[secao]) document.getElementById(mapaSecoes[secao]).classList.add('active');
+    if (mapaMenus[secao]) document.getElementById(mapaMenus[secao]).classList.add('active');
 
-    if (secao === 'minhas-apostas') {
-        carregarMinhasApostas();
-    } else if (secao === 'historico') {
-        carregarEstatisticas();
-        carregarEventosFiltro();
-        carregarHistorico();
-    } else if (secao === 'conta') {
-        carregarConta();
-    }
+    if (secao === 'minhas-apostas') carregarMinhasApostas();
+    else if (secao === 'conta') carregarConta();
 }
 
-// Carregar minhas apostas
 async function carregarMinhasApostas() {
     try {
-        const response = await fetch(`${API_URL}/apostas/minhas`, {
-            headers: getAuthHeaders()
-        });
-
+        const response = await fetch(`${API_URL}/apostas/minhas`, { headers: getAuthHeaders() });
         if (response.ok) {
             const data = await response.json();
             processarApostas(data);
         } else {
-            console.error('Erro ao carregar apostas:', response.status);
             document.getElementById('minhasApostasContainer').innerHTML = '<p style="color: #ef4444; text-align: center;">Não foi possível carregar suas apostas.</p>';
         }
     } catch (error) {
-        console.error(error);
         document.getElementById('minhasApostasContainer').innerHTML = '<p style="color: #ef4444; text-align: center;">Erro de conexão.</p>';
     }
 }
@@ -171,10 +129,6 @@ function processarApostas(data) {
                 <span>Data:</span>
                 <span>${new Date(aposta.criadoEm || aposta.timestamp).toLocaleString('pt-BR')}</span>
             </div>
-            <div class="retorno">
-                <div class="label">Retorno Estimado</div>
-                <div class="value">R$ ${parseFloat(aposta.retornoEstimado || 0).toFixed(2)}</div>
-            </div>
         </div>
     `).join('');
 
@@ -189,84 +143,50 @@ function processarApostas(data) {
     document.getElementById('minhasApostasContainer').innerHTML = apostasHTML + totalHTML;
 }
 
-// Carregar dados da conta
 function carregarConta() {
     if (!usuarioAtual) return;
 
     const tipoLabel = usuarioAtual.isSuperAdmin ? 'Super Administrador' : usuarioAtual.isAdmin ? 'Administrador' : 'Usuário';
-    const tipoBadge = usuarioAtual.isSuperAdmin ? '<span style="background: #dc2626; color: white; padding: 4px 12px; border-radius: 15px; font-size: 0.9em;">SUPER ADMIN</span>' :
-        usuarioAtual.isAdmin ? '<span style="background: #fbbf24; color: #78350f; padding: 4px 12px; border-radius: 15px; font-size: 0.9em;">ADMIN</span>' :
-            '<span style="background: #3b82f6; color: white; padding: 4px 12px; border-radius: 15px; font-size: 0.9em;">USUÁRIO</span>';
-
-    const permissoes = [];
-    if (usuarioAtual.isSuperAdmin) {
-        permissoes.push('✅ Acesso total ao painel admin');
-    } else if (usuarioAtual.isAdmin) {
-        permissoes.push('✅ Acesso ao painel admin');
-        permissoes.push('✅ Pode apostar');
-    } else {
-        permissoes.push('✅ Fazer apostas');
-    }
-
+    
     const contaHTML = `
         <div class="conta-info">
-            <div class="field">
-                <div class="label">Nome</div>
-                <div class="value">${usuarioAtual.nome}</div>
-            </div>
-            <div class="field">
-                <div class="label">Email</div>
-                <div class="value">${usuarioAtual.email}</div>
-            </div>
-            <div class="field">
-                <div class="label">Tipo de Conta</div>
-                <div class="value">${tipoLabel} ${tipoBadge}</div>
-            </div>
-            <div class="field">
-                <div class="label">Permissões</div>
-                <div class="value">
-                    ${permissoes.map(p => `<div style="margin: 5px 0; font-size: 0.95em;">${p}</div>`).join('')}
-                </div>
-            </div>
+            <div class="field"><div class="label">Nome</div><div class="value">${usuarioAtual.nome}</div></div>
+            <div class="field"><div class="label">Email</div><div class="value">${usuarioAtual.email}</div></div>
+            <div class="field"><div class="label">Tipo de Conta</div><div class="value">${tipoLabel}</div></div>
         </div>
-
         <button class="btn btn-danger btn-logout-conta" style="width: 100%; background-color:#ef4444; margin-top: 15px;">
             <p style="color:#f7f2f2">🚪 Sair da Conta </p>
         </button>
     `;
 
     document.getElementById('contaContainer').innerHTML = contaHTML;
-    
     setTimeout(() => {
         const btn = document.querySelector('.btn-logout-conta');
         if(btn) btn.addEventListener('click', logout);
     }, 100);
 }
 
-// Logout corrigido para chamar a API e matar a sessão
 async function logout() {
-    try {
-        await fetch(`${API_URL}/auth/logout`, {
-            method: 'POST',
-            headers: getAuthHeaders()
-        });
-    } catch(e) { console.error('Erro no logout', e); }
-    
+    try { await fetch(`${API_URL}/auth/logout`, { method: 'POST', headers: getAuthHeaders() }); } catch(e) {}
     localStorage.removeItem('token');
     localStorage.removeItem('usuario');
     window.location.href = '/login';
 }
 
-// Carregar resumo inicial
+// CORREÇÃO CRÍTICA: Carregar o Resumo pegando as Estatísticas Corretas do novo Backend
 async function carregarResumo() {
     try {
-        const response = await fetch(`${API_URL}/eventos/ativo`, {
-             headers: getAuthHeaders()
-        });
+        const response = await fetch(`${API_URL}/eventos/ativo`, { headers: getAuthHeaders() });
         
         if (response.ok) {
             const data = await response.json();
-            resumoAtual = data.evento || data; 
+            // Acomodando o formato Clean Architecture
+            if (data.sucesso && data.evento) {
+                resumoAtual = data.evento;
+                resumoAtual.estatisticas = data.estatisticas; // Salva estatisticas dentro do resumo
+            } else {
+                resumoAtual = data.evento || data;
+            }
             atualizarInterface();
         }
     } catch (error) {
@@ -274,13 +194,16 @@ async function carregarResumo() {
     }
 }
 
-// Atualizar interface com dados do resumo
+// CORREÇÃO CRÍTICA: Adaptar renderização dos times para Arrays (ao invés de Objects)
 function atualizarInterface() {
     if(!resumoAtual) return;
     const evento = resumoAtual;
+    const estatisticas = evento.estatisticas || null;
 
-    const times = evento.times || {}; 
-    const temTimes = Object.keys(times).length > 0;
+    // A nova API retorna times como Array: ["Time A", "Time B"]
+    const isArray = Array.isArray(evento.times);
+    const timesArray = isArray ? evento.times : Object.keys(evento.times || {});
+    const temTimes = timesArray.length > 0;
     const estaAberto = evento.status === 'aberto' || evento.aberto === true;
 
     // Status
@@ -292,29 +215,31 @@ function atualizarInterface() {
         statusContainer.innerHTML = statusHTML;
     }
 
-    // Times Grid
+    // Renderizar Times Grid
     const timesGrid = document.getElementById('timesGrid');
     if(timesGrid) {
         let timesHTML = '';
         if (temTimes) {
-            timesHTML = Object.keys(times).map(time => {
-                const dados = times[time];
-                const percentual = dados.probabilidade || dados.percentual || 0;
+            timesHTML = timesArray.map(time => {
+                // Calcular porcentagem baseado nas estatisticas
+                let percentual = 0;
+                if (isArray && estatisticas && estatisticas.totalArrecadado > 0) {
+                    const arrecadadoTime = estatisticas.totalPorTime[time] || 0;
+                    percentual = (arrecadadoTime / estatisticas.totalArrecadado) * 100;
+                } else if (!isArray && evento.times[time]) {
+                    percentual = evento.times[time].percentual || 0;
+                }
+
                 const selected = timeSelecionado === time ? 'selected' : '';
                 return `
                     <div class="time-option ${selected}" data-time="${time}">
                         <div class="time-name">${time}</div>
-                        <div class="time-prob">${parseFloat(percentual).toFixed(1)}%</div>
+                        <div class="time-prob">${percentual.toFixed(1)}%</div>
                     </div>
                 `;
             }).join('');
         } else {
-            timesHTML = `
-                <div class="empty-state" style="grid-column: 1 / -1;">
-                    <div>📭</div>
-                    <div>Nenhum time disponível</div>
-                </div>
-            `;
+            timesHTML = `<div class="empty-state" style="grid-column: 1 / -1;"><div>📭</div><div>Nenhum time disponível</div></div>`;
         }
         timesGrid.innerHTML = timesHTML;
     }
@@ -365,37 +290,22 @@ function calcularRetorno() {
 
 function mostrarAlerta(mensagem, tipo = 'success') {
     const alertContainer = document.getElementById('alertContainer');
-    if(!alertContainer) return;
-    
-    alertContainer.innerHTML = `
-        <div class="alert alert-${tipo}">
-            ${mensagem}
-        </div>
-    `;
-
-    setTimeout(() => {
-        alertContainer.innerHTML = '';
-    }, 5000);
+    if(!alertContainer) { alert(mensagem); return; }
+    alertContainer.innerHTML = `<div class="alert alert-${tipo}">${mensagem}</div>`;
+    setTimeout(() => { alertContainer.innerHTML = ''; }, 5000);
 }
 
-async function carregarEstatisticas() {}
-async function carregarEventosFiltro() {}
-async function carregarHistorico(pagina = 1) {}
-
-// ==================== INICIALIZAÇÃO ====================
-
+// INICIALIZAÇÃO
 document.addEventListener('DOMContentLoaded', () => {
     const menuApostas = document.getElementById('menuApostas');
     const menuMinhasApostas = document.getElementById('menuMinhasApostas');
     const menuConta = document.getElementById('menuConta');
     const menuAdmin = document.getElementById('menuAdmin');
-    const btnLogout = document.querySelector('.btn-logout');
 
     if (menuApostas) menuApostas.addEventListener('click', () => mostrarSecao('apostas'));
     if (menuMinhasApostas) menuMinhasApostas.addEventListener('click', () => mostrarSecao('minhas-apostas'));
     if (menuConta) menuConta.addEventListener('click', () => mostrarSecao('conta'));
     if (menuAdmin) menuAdmin.addEventListener('click', () => window.location.href = '/admin');
-    if (btnLogout) btnLogout.addEventListener('click', logout);
 
     const apostaForm = document.getElementById('apostaForm');
     if (apostaForm) {
@@ -416,13 +326,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 const data = await response.json();
 
                 if (response.ok) {
-                    mostrarAlerta(`✅ Aposta de R$ ${valor} confirmada!`, 'success');
+                    mostrarAlerta(`✅ Aposta de R$ ${valor} confirmada no ${timeSelecionado}!`, 'success');
                     apostaForm.reset();
                     timeSelecionado = null;
                     document.getElementById('retornoContainer').innerHTML = '';
                     carregarResumo();
                 } else {
-                    mostrarAlerta(data.erro || 'Erro ao apostar', 'error');
+                    mostrarAlerta(data.erro || data.error || data.message || 'Erro ao apostar', 'error');
                 }
             } catch (error) {
                 mostrarAlerta('Erro de conexão', 'error');
@@ -433,7 +343,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const valorInput = document.getElementById('valor');
     if (valorInput) valorInput.addEventListener('input', calcularRetorno);
 
-    // Iniciar
     verificarAuth();
     carregarResumo();
     setInterval(carregarResumo, 10000);

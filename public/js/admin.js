@@ -1,5 +1,6 @@
 const API_URL = '';
 let resumoAtual = null;
+let estatisticasAtual = null;
 let apostasAtual = [];
 let usuariosLista = [];
 let usuarioLogado = null;
@@ -7,10 +8,7 @@ let usuarioLogado = null;
 async function verificarAuth() {
     try {
         const response = await fetch(`${API_URL}/auth/me`, {
-            headers: { 
-                'Content-Type': 'application/json',
-                'Accept': 'application/json' 
-            }
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' }
         });
 
         if (response.ok) {
@@ -30,12 +28,7 @@ async function verificarAuth() {
 }
 
 async function logout() {
-    try { 
-        await fetch(`${API_URL}/auth/logout`, { 
-            method: 'POST',
-            headers: { 'Accept': 'application/json' }
-        }); 
-    } catch (error) {}
+    try { await fetch(`${API_URL}/auth/logout`, { method: 'POST' }); } catch (error) {}
     localStorage.removeItem('token');
     localStorage.removeItem('usuario');
     window.location.href = '/login';
@@ -49,21 +42,15 @@ async function carregarDados() {
             fetch(`${API_URL}/usuarios`, { headers: { 'Accept': 'application/json' } })
         ]);
 
-        if (resumoRes.status === 404) {
-            const resumoLegacy = await fetch(`${API_URL}/resumo`, { headers: { 'Accept': 'application/json' } });
-            if (resumoLegacy.ok) resumoAtual = await resumoLegacy.json();
-        } else if (resumoRes.ok) {
+        if (resumoRes.ok) {
             const data = await resumoRes.json();
             resumoAtual = data.evento || data;
+            estatisticasAtual = data.estatisticas || null;
         }
 
         if (dadosRes.ok) {
             const dadosCompletos = await dadosRes.json();
             apostasAtual = dadosCompletos.apostas || [];
-            // Fallback caso /eventos/ativo falhe mas /dados funcione (rota legada)
-            if (!resumoAtual && dadosCompletos.evento) {
-                resumoAtual = dadosCompletos.evento;
-            }
         }
 
         if (usuariosRes.ok) {
@@ -79,16 +66,15 @@ async function carregarDados() {
 }
 
 function atualizarInterface() {
-    // Se não houver evento, avisa o Admin visualmente na tela
-    if (!resumoAtual) {
+    if (!resumoAtual || !resumoAtual.id) {
         const statusSection = document.getElementById('statusSection');
         if (statusSection) {
             statusSection.innerHTML = `
                 <div style="background: #fef3c7; color: #92400e; padding: 20px; border-radius: 8px; border: 2px dashed #fbbf24; width: 100%; text-align: center; font-size: 1.1em;">
-                    ⚠️ O banco de dados está vazio. <br><br> Nenhum evento ativo no momento. Clique no botão <b>"Novo Evento"</b> ou <b>"Reset"</b> para criar o primeiro evento e começar!
+                    ⚠️ O banco de dados está vazio ou não há evento ativo. <br><br> Clique no botão <b>"Novo Evento"</b> para adicionar os times e começar!
                 </div>`;
         }
-        return; // Interrompe a atualização do resto pois não há dados
+        return; 
     }
 
     atualizarStatus();
@@ -100,6 +86,17 @@ function atualizarInterface() {
 function atualizarStatus() {
     const estaAberto = resumoAtual.status === 'aberto' || resumoAtual.aberto === true;
     
+    // Pega total da API nova (estatisticas) ou fallback da antiga
+    let totalGeral = 0;
+    if (estatisticasAtual && estatisticasAtual.totalArrecadado !== undefined) {
+        totalGeral = estatisticasAtual.totalArrecadado;
+    } else if (resumoAtual.totalGeral) {
+        totalGeral = resumoAtual.totalGeral;
+    }
+
+    const taxaPlataforma = totalGeral * 0.05;
+    const totalPremio = totalGeral - taxaPlataforma;
+
     const statusHTML = `
         <div class="stat-card blue">
             <div class="label">Status</div>
@@ -108,22 +105,22 @@ function atualizarStatus() {
         </div>
         <div class="stat-card green">
             <div class="label">Total Apostado</div>
-            <div class="value">R$ ${(resumoAtual.totalGeral || 0).toFixed(2)}</div>
+            <div class="value">R$ ${totalGeral.toFixed(2)}</div>
         </div>
         <div class="stat-card orange">
             <div class="label">Nº de Apostas</div>
             <div class="value">${apostasAtual.length}</div>
         </div>
         <div class="stat-card" style="background: #fef3c7; border: 2px solid #fbbf24;">
-            <div class="label">Taxa (${resumoAtual.percentualTaxa || 5}%)</div>
-            <div class="value" style="font-size: 1.3em;">R$ ${(resumoAtual.taxaPlataforma || 0).toFixed(2)}</div>
-            <div class="label" style="font-size: 0.85em; margin-top: 5px;">Prêmio: R$ ${(resumoAtual.totalPremio || 0).toFixed(2)}</div>
+            <div class="label">Taxa (5%)</div>
+            <div class="value" style="font-size: 1.3em;">R$ ${taxaPlataforma.toFixed(2)}</div>
+            <div class="label" style="font-size: 0.85em; margin-top: 5px;">Prêmio Líquido: R$ ${totalPremio.toFixed(2)}</div>
         </div>
     `;
     document.getElementById('statusSection').innerHTML = statusHTML;
 
-    const btnAbrir = document.getElementById('btnAbrir') || Array.from(document.querySelectorAll('button')).find(b => b.textContent.includes('Abrir'));
-    const btnFechar = document.getElementById('btnFechar') || Array.from(document.querySelectorAll('button')).find(b => b.textContent.includes('Fechar'));
+    const btnAbrir = document.getElementById('btnAbrir');
+    const btnFechar = document.getElementById('btnFechar');
 
     if (btnAbrir) btnAbrir.disabled = estaAberto;
     if (btnFechar) btnFechar.disabled = !estaAberto;
@@ -168,7 +165,6 @@ function atualizarUsuarios() {
         if (isUsuarioComum) {
             acoesHTML += `<button class="btn btn-success btn-small btn-promover" data-user-id="${usuario.id}" data-user-nome="${usuario.nome}" style="padding: 6px 12px; font-size: 0.85em; margin-right: 5px;">⬆️ Promover</button>`;
         }
-
         if (isAdmin && usuarioLogado && usuarioLogado.isSuperAdmin) {
             acoesHTML += `<button class="btn btn-danger btn-small btn-rebaixar" data-user-id="${usuario.id}" data-user-nome="${usuario.nome}" style="padding: 6px 12px; font-size: 0.85em;">⬇️ Rebaixar</button>`;
         }
@@ -195,50 +191,6 @@ function atualizarUsuarios() {
     });
 }
 
-async function promoverUsuario(userId, nome) {
-    if (!confirm(`Promover ${nome} a Administrador?`)) return;
-    try {
-        const response = await fetch(`${API_URL}/usuarios/${userId}/promover`, { 
-            method: 'POST', 
-            headers: { 
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-            } 
-        });
-        
-        let data = {}; try { data = await response.json(); } catch(e){}
-        
-        if (response.ok) { 
-            mostrarAlerta(`✅ Usuário promovido com sucesso!`, 'success'); 
-            await carregarDados(); 
-        } else {
-            mostrarAlerta(data.erro || data.error || 'Erro ao promover usuário', 'error');
-        }
-    } catch (error) { mostrarAlerta('Erro de conexão', 'error'); }
-}
-
-async function rebaixarUsuario(userId, nome) {
-    if (!confirm(`Rebaixar ${nome} para Usuário Comum?`)) return;
-    try {
-        const response = await fetch(`${API_URL}/usuarios/${userId}/rebaixar`, { 
-            method: 'POST', 
-            headers: { 
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-            } 
-        });
-        
-        let data = {}; try { data = await response.json(); } catch(e){}
-
-        if (response.ok) { 
-            mostrarAlerta(`✅ Usuário rebaixado com sucesso!`, 'success'); 
-            await carregarDados(); 
-        } else {
-            mostrarAlerta(data.erro || data.error || 'Erro ao rebaixar usuário', 'error');
-        }
-    } catch (error) { mostrarAlerta('Erro de conexão', 'error'); }
-}
-
 function atualizarVencedor() {
     const alert = document.getElementById('vencedorAlert');
     const estaAberto = resumoAtual.status === 'aberto' || resumoAtual.aberto === true;
@@ -255,12 +207,25 @@ function atualizarVencedor() {
         alert.style.display = 'none';
     }
 
-    const times = resumoAtual.times || {};
-    const vencedorHTML = Object.keys(times).map(time => `
+    // Pega os times da array e renderiza
+    const timesArray = Array.isArray(resumoAtual.times) ? resumoAtual.times : Object.keys(resumoAtual.times || {});
+    
+    const vencedorHTML = timesArray.map(time => {
+        // Busca porcentagem na nova API se disponível
+        let percentual = 0;
+        if (estatisticasAtual && estatisticasAtual.totalArrecadado > 0) {
+            const timeArrecadado = estatisticasAtual.totalPorTime[time] || 0;
+            percentual = (timeArrecadado / estatisticasAtual.totalArrecadado) * 100;
+        } else if (!Array.isArray(resumoAtual.times) && resumoAtual.times[time]) {
+            percentual = resumoAtual.times[time].percentual || 0;
+        }
+
+        return `
         <div class="vencedor-btn ${resumoAtual.vencedor === time ? 'selected' : ''}" data-time="${time}">
-            ${time}<div style="font-size: 0.85em; margin-top: 5px;">${(times[time].percentual || 0)}%</div>
+            ${time}<div style="font-size: 0.85em; margin-top: 5px;">${percentual.toFixed(1)}%</div>
         </div>
-    `).join('');
+        `;
+    }).join('');
 
     document.getElementById('vencedorSection').innerHTML = vencedorHTML;
 
@@ -279,43 +244,43 @@ function mostrarAlerta(mensagem, tipo = 'success') {
     }
 }
 
-async function abrirApostas() {
+// CORREÇÃO CRÍTICA: Conectado à rota nova da Clean Architecture
+async function alterarStatusApostas(abrir) {
     try {
-        const response = await fetch(`${API_URL}/evento/abrir-fechar`, { 
-            method: 'POST', 
-            headers: { 
-                'Content-Type': 'application/json',
-                'Accept': 'application/json' // OBRIGATÓRIO: Força erro JSON se barrado pelo auth
-            } 
+        const response = await fetch(`${API_URL}/eventos/ativo/apostas`, { 
+            method: 'POST', // Pode ser PATCH ou POST dependendo do seu setup de rotas
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+            body: JSON.stringify({ abrir: abrir })
         });
         
         let data = {}; try { data = await response.json(); } catch(e){}
 
         if (response.ok) {
-            mostrarAlerta('✅ Status alterado com sucesso!', 'success');
+            mostrarAlerta(`✅ Apostas ${abrir ? 'Abertas' : 'Fechadas'} com sucesso!`, 'success');
             await carregarDados();
         } else {
-            // Agora ele mostra o erro exato caso não esteja autorizado
-            mostrarAlerta(data.erro || data.error || 'Erro ao alterar status', 'error');
+            mostrarAlerta(data.erro || data.error || data.message || 'Erro ao alterar status', 'error');
         }
     } catch (error) { mostrarAlerta('Erro de conexão com o servidor', 'error'); }
 }
 
-async function fecharApostas() {
-    if (!confirm('Deseja fechar as apostas?')) return;
-    abrirApostas(); 
+async function abrirApostas() {
+    alterarStatusApostas(true);
 }
 
+async function fecharApostas() {
+    if (!confirm('Deseja fechar as apostas? Ninguém mais poderá apostar.')) return;
+    alterarStatusApostas(false); 
+}
+
+// CORREÇÃO: Conectado à rota nova da Clean Architecture
 async function definirVencedor(time) {
-    if (!confirm(`Confirmar ${time} como vencedor?`)) return;
+    if (!confirm(`Confirmar ${time} como vencedor final?`)) return;
     try {
-        const response = await fetch(`${API_URL}/vencedor`, {
+        const response = await fetch(`${API_URL}/eventos/ativo/vencedor`, {
             method: 'POST',
-            headers: { 
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-            },
-            body: JSON.stringify({ time })
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+            body: JSON.stringify({ timeVencedor: time })
         });
         
         let data = {}; try { data = await response.json(); } catch(e){}
@@ -324,29 +289,42 @@ async function definirVencedor(time) {
             mostrarAlerta(`🏆 Vencedor definido!`, 'success'); 
             await carregarDados(); 
         } else {
-            mostrarAlerta(data.erro || data.error || 'Erro ao definir vencedor', 'error');
+            mostrarAlerta(data.erro || data.error || data.message || 'Erro ao definir vencedor', 'error');
         }
     } catch (error) { mostrarAlerta('Erro de conexão', 'error');}
 }
 
+// CORREÇÃO CRÍTICA: Interface para adicionar nomes e times
 async function resetarEvento() {
-    if (!confirm('🚨 ATENÇÃO: Deseja criar um NOVO EVENTO? Isso irá arquivar o atual e apagar as apostas da tela.')) return;
+    if (!confirm('🚨 ATENÇÃO: Isso irá arquivar o evento atual e criar um novo.')) return;
+
+    const nome = prompt('Digite o NOME do novo evento (ex: Rodada 1):', 'Novo Evento');
+    if (!nome) return; // Cancelou
+
+    const timesInput = prompt('Digite os TIMES participantes separados por VÍRGULA:\n(Ex: São Paulo, Corinthians, Palmeiras)', 'Time A, Time B');
+    if (!timesInput) return; // Cancelou
+
+    // Converte a string separada por vírgula numa array limpa
+    const times = timesInput.split(',').map(t => t.trim()).filter(t => t.length > 0);
+
+    if (times.length < 2) {
+        return mostrarAlerta('Erro: É obrigatório inserir pelo menos 2 times.', 'error');
+    }
+
     try {
-        const response = await fetch(`${API_URL}/reset`, { 
+        const response = await fetch(`${API_URL}/eventos/resetar`, { 
             method: 'POST', 
-            headers: { 
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-            } 
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+            body: JSON.stringify({ nome: nome, times: times })
         });
 
         let data = {}; try { data = await response.json(); } catch(e){}
 
         if (response.ok) { 
-            mostrarAlerta('🔄 Novo evento criado com sucesso!', 'success'); 
+            mostrarAlerta('🔄 Novo evento criado com sucesso! Partiu apostar!', 'success'); 
             await carregarDados(); 
         } else {
-            mostrarAlerta(data.erro || data.error || 'Erro ao criar novo evento', 'error');
+            mostrarAlerta(data.erro || data.error || data.message || 'Erro ao criar novo evento', 'error');
         }
     } catch (error) { mostrarAlerta('Erro de conexão', 'error'); }
 }
@@ -358,9 +336,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (btnLogout) btnLogout.onclick = (e) => { e.preventDefault(); logout(); };
     if (btnAtualizar) btnAtualizar.onclick = (e) => { e.preventDefault(); carregarDados(); };
 
-    const btnAbrir = document.getElementById('btnAbrir') || Array.from(document.querySelectorAll('button')).find(b => b.textContent.includes('Abrir'));
-    const btnFechar = document.getElementById('btnFechar') || Array.from(document.querySelectorAll('button')).find(b => b.textContent.includes('Fechar'));
-    const btnReset = document.getElementById('btnReset') || document.getElementById('btnNovoEvento') || Array.from(document.querySelectorAll('button')).find(b => b.textContent.includes('Novo Evento') || b.textContent.includes('Reset'));
+    const btnAbrir = document.getElementById('btnAbrir');
+    const btnFechar = document.getElementById('btnFechar');
+    const btnReset = document.getElementById('btnReset');
 
     if (btnAbrir) btnAbrir.onclick = (e) => { e.preventDefault(); abrirApostas(); };
     if (btnFechar) btnFechar.onclick = (e) => { e.preventDefault(); fecharApostas(); };
