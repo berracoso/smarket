@@ -1,16 +1,16 @@
 // src/infrastructure/config/container.js
 
 // 1. Database & Config
-const database = require('../database/postgres');
+const getDbConnection = require('../database/sqlite'); // <-- Alterado aqui
 const BcryptHasher = require('../security/BcryptHasher');
 const SessionManager = require('../security/SessionManager');
 
-// 2. Repositories
-const PostgresUsuarioRepository = require('../repositories/PostgresUsuarioRepository');
-const PostgresEventoRepository = require('../repositories/PostgresEventoRepository');
-const PostgresApostaRepository = require('../repositories/PostgresApostaRepository');
+// 2. Repositories (SQLite) <-- Alterado aqui
+const SQLiteUsuarioRepository = require('../repositories/SQLiteUsuarioRepository');
+const SQLiteEventoRepository = require('../repositories/SQLiteEventoRepository');
+const SQLiteApostaRepository = require('../repositories/SQLiteApostaRepository');
 
-// 3. Middlewares (Classes)
+// 3. Middlewares
 const AuthenticationMiddleware = require('../../interface/http/middlewares/authentication');
 const AuthorizationMiddleware = require('../../interface/http/middlewares/authorization');
 
@@ -24,25 +24,22 @@ const DefinirVencedor = require('../../application/use-cases/eventos/DefinirVenc
 const CriarAposta = require('../../application/use-cases/apostas/CriarAposta');
 const ListarMinhasApostas = require('../../application/use-cases/apostas/ListarMinhasApostas');
 
-// 5. Controllers (IMPORTANTE: Faltava isso no seu original)
+// 5. Controllers
 const AuthController = require('../../interface/http/controllers/AuthController');
 const EventosController = require('../../interface/http/controllers/EventosController');
 const ApostasController = require('../../interface/http/controllers/ApostasController');
 const UsersController = require('../../interface/http/controllers/UsersController');
 
 // --- INSTANCIAÇÃO ---
-
-// Infra
 const hasher = new BcryptHasher();
 const sessionManager = new SessionManager(); 
 
-// Repositories
-const usuarioRepository = new PostgresUsuarioRepository(database);
-const eventoRepository = new PostgresEventoRepository(database);
-const apostaRepository = new PostgresApostaRepository(database);
+// Repositories (Passamos a função getDbConnection) <-- Alterado aqui
+const usuarioRepository = new SQLiteUsuarioRepository(getDbConnection);
+const eventoRepository = new SQLiteEventoRepository(getDbConnection);
+const apostaRepository = new SQLiteApostaRepository(getDbConnection);
 
 // Middlewares
-// (Atenção: Passamos o sessionManager ou repositório se necessário)
 const authenticationMiddleware = new AuthenticationMiddleware(usuarioRepository);
 const authorizationMiddleware = new AuthorizationMiddleware(usuarioRepository);
 
@@ -60,19 +57,13 @@ const listarMinhasApostas = new ListarMinhasApostas(apostaRepository);
 const authController = new AuthController(fazerLogin, registrarUsuario);
 const eventosController = new EventosController(obterEventoAtivo, criarNovoEvento, abrirFecharApostas, definirVencedor);
 const apostasController = new ApostasController(criarAposta, listarMinhasApostas);
-// UsersController geralmente precisa apenas do repositório ou de casos de uso de listagem
 const usersController = new UsersController(usuarioRepository); 
 
 module.exports = {
-  // Infra
-  database,
+  getDbConnection, // Opcional expor
   hasher,
-
-  // Middlewares
   authenticationMiddleware,
   authorizationMiddleware,
-
-  // Controllers (As rotas usam ISSO)
   authController,
   eventosController,
   apostasController,
