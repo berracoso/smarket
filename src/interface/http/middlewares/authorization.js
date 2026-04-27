@@ -1,8 +1,7 @@
 class AuthorizationMiddleware {
-    // Admin ou Super Admin (Para painel e gestão)
     isAdmin() {
         return (req, res, next) => {
-            const usuario = req.usuario;
+            const usuario = req.user; // CORRIGIDO DE req.usuario PARA req.user
             if (!usuario) return res.status(401).json({ erro: 'Usuário não autenticado.' });
             
             if (usuario.isAdmin || usuario.isSuperAdmin) return next();
@@ -11,10 +10,9 @@ class AuthorizationMiddleware {
         };
     }
 
-    // Apenas Super Admin (Para resetar sistema e promover admins)
     isSuperAdmin() {
         return (req, res, next) => {
-            const usuario = req.usuario;
+            const usuario = req.user; // CORRIGIDO DE req.usuario PARA req.user
             if (!usuario) return res.status(401).json({ erro: 'Usuário não autenticado.' });
 
             if (usuario.isSuperAdmin) return next();
@@ -23,13 +21,11 @@ class AuthorizationMiddleware {
         };
     }
 
-    // Permissão para apostar (Super Admin NÃO pode)
     canBet() {
         return (req, res, next) => {
-            const usuario = req.usuario;
+            const usuario = req.user; // CORRIGIDO DE req.usuario PARA req.user
             if (!usuario) return res.status(401).json({ erro: 'Usuário não autenticado.' });
 
-            // Regra de Negócio: Super Admin é apenas gestor, não aposta
             if (usuario.isSuperAdmin) {
                 return res.status(403).json({ erro: 'Super Admins não podem realizar apostas.' });
             }
@@ -38,7 +34,6 @@ class AuthorizationMiddleware {
         };
     }
 
-    // Alias para compatibilidade (se alguma rota antiga chamar requireAdmin)
     requireAdmin() {
         return this.isAdmin();
     }

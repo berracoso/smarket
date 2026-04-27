@@ -294,39 +294,39 @@ async function definirVencedor(time) {
     } catch (error) { mostrarAlerta('Erro de conexão', 'error');}
 }
 
-// CORREÇÃO CRÍTICA: Interface para adicionar nomes e times
 async function resetarEvento() {
     if (!confirm('🚨 ATENÇÃO: Isso irá arquivar o evento atual e criar um novo.')) return;
 
-    const nome = prompt('Digite o NOME do novo evento (ex: Rodada 1):', 'Novo Evento');
-    if (!nome) return; // Cancelou
+    const nome = prompt('Digite o nome do novo evento:', 'Rodada 01');
+    if (!nome) return;
 
-    const timesInput = prompt('Digite os TIMES participantes separados por VÍRGULA:\n(Ex: São Paulo, Corinthians, Palmeiras)', 'Time A, Time B');
-    if (!timesInput) return; // Cancelou
+    const timesInput = prompt('Digite os times separados por vírgula:', 'Time A, Time B');
+    if (!timesInput) return;
 
-    // Converte a string separada por vírgula numa array limpa
     const times = timesInput.split(',').map(t => t.trim()).filter(t => t.length > 0);
 
-    if (times.length < 2) {
-        return mostrarAlerta('Erro: É obrigatório inserir pelo menos 2 times.', 'error');
-    }
-
     try {
-        const response = await fetch(`${API_URL}/eventos/resetar`, { 
+        const response = await fetch('/reset', { 
             method: 'POST', 
-            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-            body: JSON.stringify({ nome: nome, times: times })
+            headers: { 
+                'Content-Type': 'application/json',
+                'Accept': 'application/json' 
+            },
+            body: JSON.stringify({ nome, times })
         });
 
-        let data = {}; try { data = await response.json(); } catch(e){}
+        const data = await response.json();
 
-        if (response.ok) { 
-            mostrarAlerta('🔄 Novo evento criado com sucesso! Partiu apostar!', 'success'); 
+        if (response.ok && data.sucesso) { 
+            mostrarAlerta('✅ Novo evento criado com sucesso!', 'success'); 
             await carregarDados(); 
         } else {
-            mostrarAlerta(data.erro || data.error || data.message || 'Erro ao criar novo evento', 'error');
+            // Exibe a mensagem de erro vinda do backend
+            mostrarAlerta(data.erro || 'Erro ao criar novo evento', 'error');
         }
-    } catch (error) { mostrarAlerta('Erro de conexão', 'error'); }
+    } catch (error) { 
+        mostrarAlerta('Erro de conexão com o servidor', 'error'); 
+    }
 }
 
 document.addEventListener('DOMContentLoaded', () => {
