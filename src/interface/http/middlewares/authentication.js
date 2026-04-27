@@ -3,18 +3,21 @@ class AuthenticationMiddleware {
         this.usuarioRepository = usuarioRepository;
     }
 
-    // Usamos arrow function para não perder o 'this'
     requireAuth = async (req, res, next) => {
-        // 1. Verifica se existe sessão ativa (criada pelo connect-pg-simple)
-        if (req.session && req.session.user) {
-            // Sessão válida! Passa o usuário para o request
-            req.user = req.session.user;
+        // Pega o usuário da sessão, seja ele qual for o nome salvo
+        const sessionUser = req.session ? (req.session.user || req.session.usuario) : null;
+
+        if (sessionUser) {
+            // A MÁGICA: Injeta todas as variações no request para que NENHUM arquivo quebre
+            req.user = sessionUser;
+            req.usuario = sessionUser;
+            req.userId = sessionUser.id;
+            
             return next();
         }
 
-        // 2. Se não tiver sessão, retorna erro 401
         // Se a requisição espera JSON (API)
-        if (req.xhr || req.headers.accept.indexOf('json') > -1) {
+        if (req.xhr || (req.headers.accept && req.headers.accept.indexOf('json') > -1)) {
             return res.status(401).json({ error: 'Não autorizado. Faça login.' });
         }
 
@@ -22,10 +25,12 @@ class AuthenticationMiddleware {
         return res.redirect('/login');
     };
     
-    // Opcional: Middleware para apenas injetar usuário se existir, sem bloquear
     tryAuth = (req, res, next) => {
-        if (req.session && req.session.user) {
-            req.user = req.session.user;
+        const sessionUser = req.session ? (req.session.user || req.session.usuario) : null;
+        if (sessionUser) {
+            req.user = sessionUser;
+            req.usuario = sessionUser;
+            req.userId = sessionUser.id;
         }
         next();
     };
