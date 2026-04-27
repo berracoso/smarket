@@ -17,7 +17,7 @@ class AuthenticationMiddleware {
         }
 
         // Se a requisição espera JSON (API)
-        if (req.xhr || (req.headers.accept && req.headers.accept.indexOf('json') > -1)) {
+        if (req.xhr || (req.headers && req.headers.accept && req.headers.accept.indexOf('json') > -1)) {
             return res.status(401).json({ error: 'Não autorizado. Faça login.' });
         }
 
