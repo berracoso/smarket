@@ -21,7 +21,6 @@ class SQLiteEventoRepository {
         );
     }
 
-    // Novos métodos exigidos pela Clean Architecture implementados abaixo
     async atualizar(evento) {
         return await this.salvar(evento);
     }
@@ -52,12 +51,22 @@ class SQLiteEventoRepository {
         }
     }
 
+    // ==========================================
+    // 🛡️ CORREÇÃO DE CONTRATO (ALIAS)
+    // ==========================================
+    // Atende aos Use Cases de Leitura
     async obterEventoAtivo() {
         const db = await this.dbPromise();
         const row = await db.get("SELECT * FROM eventos WHERE status = 'ativo' LIMIT 1");
         if (!row) return null;
         return this._mapToEntity(row);
     }
+
+    // Atende aos Use Cases de Mutação (Apostas, Vencedor, Reset)
+    async buscarEventoAtivo() {
+        return await this.obterEventoAtivo();
+    }
+    // ==========================================
 
     async buscarPorId(id) {
         const db = await this.dbPromise();
