@@ -21,6 +21,37 @@ class SQLiteEventoRepository {
         );
     }
 
+    // Novos métodos exigidos pela Clean Architecture implementados abaixo
+    async atualizar(evento) {
+        return await this.salvar(evento);
+    }
+
+    async criar(evento) {
+        await this.salvar(evento);
+        return evento.id;
+    }
+
+    async finalizar(id) {
+        const db = await this.dbPromise();
+        await db.run(
+            `UPDATE eventos SET status = 'finalizado', aberto = 0, finalizadoEm = ? WHERE id = ?`,
+            [new Date().toISOString(), id]
+        );
+    }
+
+    async salvarHistorico(evento, totalArrecadado, totalPremios) {
+        const db = await this.dbPromise();
+        try {
+            await db.run(
+                `INSERT INTO historico_eventos (evento_id, nome, vencedor, total_arrecadado, total_premios, finalizado_em) 
+                 VALUES (?, ?, ?, ?, ?, ?)`,
+                [evento.id, evento.nome, evento.vencedor, totalArrecadado, totalPremios, new Date().toISOString()]
+            );
+        } catch (error) {
+            console.warn('Tabela de histórico ausente, pulando gravação do log.');
+        }
+    }
+
     async obterEventoAtivo() {
         const db = await this.dbPromise();
         const row = await db.get("SELECT * FROM eventos WHERE status = 'ativo' LIMIT 1");
@@ -38,7 +69,6 @@ class SQLiteEventoRepository {
     _mapToEntity(row) {
         let timesArray = [];
         
-        // CORREÇÃO: Try/Catch adicionado para evitar crash no JSON.parse
         try {
             timesArray = row.times ? JSON.parse(row.times) : [];
         } catch (error) {

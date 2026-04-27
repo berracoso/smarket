@@ -86,7 +86,6 @@ function atualizarInterface() {
 function atualizarStatus() {
     const estaAberto = resumoAtual.status === 'aberto' || resumoAtual.aberto === true;
     
-    // Pega total da API nova (estatisticas) ou fallback da antiga
     let totalGeral = 0;
     if (estatisticasAtual && estatisticasAtual.totalArrecadado !== undefined) {
         totalGeral = estatisticasAtual.totalArrecadado;
@@ -207,11 +206,9 @@ function atualizarVencedor() {
         alert.style.display = 'none';
     }
 
-    // Pega os times da array e renderiza
     const timesArray = Array.isArray(resumoAtual.times) ? resumoAtual.times : Object.keys(resumoAtual.times || {});
     
     const vencedorHTML = timesArray.map(time => {
-        // Busca porcentagem na nova API se disponível
         let percentual = 0;
         if (estatisticasAtual && estatisticasAtual.totalArrecadado > 0) {
             const timeArrecadado = estatisticasAtual.totalPorTime[time] || 0;
@@ -244,11 +241,10 @@ function mostrarAlerta(mensagem, tipo = 'success') {
     }
 }
 
-// CORREÇÃO CRÍTICA: Conectado à rota nova da Clean Architecture
 async function alterarStatusApostas(abrir) {
     try {
         const response = await fetch(`${API_URL}/eventos/ativo/apostas`, { 
-            method: 'POST', // Pode ser PATCH ou POST dependendo do seu setup de rotas
+            method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
             body: JSON.stringify({ abrir: abrir })
         });
@@ -259,7 +255,8 @@ async function alterarStatusApostas(abrir) {
             mostrarAlerta(`✅ Apostas ${abrir ? 'Abertas' : 'Fechadas'} com sucesso!`, 'success');
             await carregarDados();
         } else {
-            mostrarAlerta(data.erro || data.error || data.message || 'Erro ao alterar status', 'error');
+            const msgErro = (typeof data.error === 'string' ? data.error : data.message) || data.erro || 'Erro ao alterar status';
+            mostrarAlerta(msgErro, 'error');
         }
     } catch (error) { mostrarAlerta('Erro de conexão com o servidor', 'error'); }
 }
@@ -273,7 +270,6 @@ async function fecharApostas() {
     alterarStatusApostas(false); 
 }
 
-// CORREÇÃO: Conectado à rota nova da Clean Architecture
 async function definirVencedor(time) {
     if (!confirm(`Confirmar ${time} como vencedor final?`)) return;
     try {
@@ -289,7 +285,8 @@ async function definirVencedor(time) {
             mostrarAlerta(`🏆 Vencedor definido!`, 'success'); 
             await carregarDados(); 
         } else {
-            mostrarAlerta(data.erro || data.error || data.message || 'Erro ao definir vencedor', 'error');
+            const msgErro = (typeof data.error === 'string' ? data.error : data.message) || data.erro || 'Erro ao definir vencedor';
+            mostrarAlerta(msgErro, 'error');
         }
     } catch (error) { mostrarAlerta('Erro de conexão', 'error');}
 }
@@ -306,7 +303,7 @@ async function resetarEvento() {
     const times = timesInput.split(',').map(t => t.trim()).filter(t => t.length > 0);
 
     try {
-        const response = await fetch('/reset', { 
+        const response = await fetch(`${API_URL}/eventos/resetar`, { 
             method: 'POST', 
             headers: { 
                 'Content-Type': 'application/json',
@@ -321,8 +318,8 @@ async function resetarEvento() {
             mostrarAlerta('✅ Novo evento criado com sucesso!', 'success'); 
             await carregarDados(); 
         } else {
-            // Exibe a mensagem de erro vinda do backend
-            mostrarAlerta(data.erro || 'Erro ao criar novo evento', 'error');
+            const msgErro = (typeof data.error === 'string' ? data.error : data.message) || data.erro || 'Erro ao criar novo evento';
+            mostrarAlerta(msgErro, 'error');
         }
     } catch (error) { 
         mostrarAlerta('Erro de conexão com o servidor', 'error'); 

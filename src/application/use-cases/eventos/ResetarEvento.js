@@ -28,7 +28,7 @@ class ResetarEvento {
 
         // 2. Verificar permissão
         if (!this.validadorPermissoes.podeGerenciarEventos(usuario)) {
-            throw new Error('Apenas Admin e Super Admin podem Novo eventos');
+            throw new Error('Apenas Admin e Super Admin podem criar novos eventos');
         }
 
         // 3. Buscar evento ativo (se existir)
@@ -37,18 +37,12 @@ class ResetarEvento {
         let eventoAntigoId = null;
         if (eventoAtual) {
             eventoAntigoId = eventoAtual.id;
-            // Arquivar evento atual
+            // Arquivar evento atual mudando seu status para "arquivado"
             eventoAtual.arquivar();
-            await this.eventoRepository.atualizar(eventoAtual); // mudou de salvar para atualizar? no sqlite.js tem salvar
-            // Se o repository for SQLiteEventoRepository, a funcao é salvar()
-            if(this.eventoRepository.salvar) {
-                 await this.eventoRepository.salvar(eventoAtual);
-            } else if (this.eventoRepository.atualizar) {
-                 await this.eventoRepository.atualizar(eventoAtual);
-            }
+            await this.eventoRepository.atualizar(eventoAtual);
         }
 
-        // 4. Validar times do novo evento (agora usando os defaults)
+        // 4. Validar times do novo evento
         if (!times || !Array.isArray(times) || times.length < 2) {
             throw new Error('É necessário informar pelo menos 2 times');
         }
@@ -63,13 +57,8 @@ class ResetarEvento {
             times
         });
 
-        let novoEventoId;
-        if(this.eventoRepository.criar) {
-            novoEventoId = await this.eventoRepository.criar(novoEvento);
-        } else if (this.eventoRepository.salvar) {
-            await this.eventoRepository.salvar(novoEvento);
-            novoEventoId = novoEvento.id;
-        }
+        // Usando o método criar padronizado no Repositório
+        const novoEventoId = await this.eventoRepository.criar(novoEvento);
 
         return {
             sucesso: true,
