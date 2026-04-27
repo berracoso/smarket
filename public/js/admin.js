@@ -5,10 +5,35 @@ let apostasAtual = [];
 let usuariosLista = [];
 let usuarioLogado = null;
 
+// ==========================================
+// 🛡️ CORE: Utilitários Anti-Bugs
+// ==========================================
+const extrairErro = (data) => {
+    if (!data) return 'Erro desconhecido de rede.';
+    if (data.mensagem) return data.mensagem; // Padrão do error-handler.js
+    if (data.message) return data.message;
+    if (typeof data.erro === 'string') return data.erro;
+    if (typeof data.error === 'string') return data.error;
+    return 'Falha na operação solicitada pelo servidor.';
+};
+
+function mostrarAlerta(mensagem, tipo = 'success') {
+    const alertContainer = document.getElementById('alertContainer');
+    if (alertContainer) {
+        alertContainer.innerHTML = `<div class="alert alert-${tipo}">${mensagem}</div>`;
+        setTimeout(() => { alertContainer.innerHTML = ''; }, 5000);
+    } else {
+        alert(mensagem);
+    }
+}
+
+// ==========================================
+// 🔄 CORE: Sincronia e Autenticação
+// ==========================================
 async function verificarAuth() {
     try {
-        const response = await fetch(`${API_URL}/auth/me`, {
-            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' }
+        const response = await fetch(`${API_URL}/auth/me?_t=${Date.now()}`, {
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'Cache-Control': 'no-store' }
         });
 
         if (response.ok) {
@@ -16,7 +41,7 @@ async function verificarAuth() {
             usuarioLogado = data.user || data.usuario || data;
 
             if (!usuarioLogado || (!usuarioLogado.isAdmin && !usuarioLogado.isSuperAdmin)) {
-                mostrarAlerta('Acesso negado. Apenas administradores podem acessar esta página.', 'error');
+                mostrarAlerta('Acesso negado. Apenas administradores.', 'error');
                 setTimeout(() => { window.location.href = '/'; }, 2000);
             }
         } else {
@@ -36,10 +61,14 @@ async function logout() {
 
 async function carregarDados() {
     try {
+        // CORREÇÃO: Prevenção rigorosa de cache do navegador usando timestamp e headers no-store
+        const noCacheHeaders = { 'Accept': 'application/json', 'Cache-Control': 'no-store, no-cache, must-revalidate', 'Pragma': 'no-cache' };
+        const ts = Date.now();
+
         const [resumoRes, dadosRes, usuariosRes] = await Promise.all([
-            fetch(`${API_URL}/eventos/ativo`, { headers: { 'Accept': 'application/json' } }), 
-            fetch(`${API_URL}/dados`, { headers: { 'Accept': 'application/json' } }),
-            fetch(`${API_URL}/usuarios`, { headers: { 'Accept': 'application/json' } })
+            fetch(`${API_URL}/eventos/ativo?_t=${ts}`, { headers: noCacheHeaders }), 
+            fetch(`${API_URL}/dados?_t=${ts}`, { headers: noCacheHeaders }),
+            fetch(`${API_URL}/usuarios?_t=${ts}`, { headers: noCacheHeaders })
         ]);
 
         if (resumoRes.ok) {
@@ -60,11 +89,14 @@ async function carregarDados() {
 
         atualizarInterface();
     } catch (error) {
-        console.error(error);
-        mostrarAlerta('Erro ao carregar dados do servidor', 'error');
+        console.error("Erro na sincronia:", error);
+        mostrarAlerta('Erro ao carregar dados atualizados do servidor', 'error');
     }
 }
 
+// ==========================================
+// 🎨 CORE: Renderização da Interface
+// ==========================================
 function atualizarInterface() {
     if (!resumoAtual || !resumoAtual.id) {
         const statusSection = document.getElementById('statusSection');
@@ -96,7 +128,7 @@ function atualizarStatus() {
     const taxaPlataforma = totalGeral * 0.05;
     const totalPremio = totalGeral - taxaPlataforma;
 
-    const statusHTML = `
+    document.getElementById('statusSection').innerHTML = `
         <div class="stat-card blue">
             <div class="label">Status</div>
             <div class="value">${estaAberto ? '🟢' : '🔴'}</div>
@@ -116,7 +148,6 @@ function atualizarStatus() {
             <div class="label" style="font-size: 0.85em; margin-top: 5px;">Prêmio Líquido: R$ ${totalPremio.toFixed(2)}</div>
         </div>
     `;
-    document.getElementById('statusSection').innerHTML = statusHTML;
 
     const btnAbrir = document.getElementById('btnAbrir');
     const btnFechar = document.getElementById('btnFechar');
@@ -136,7 +167,7 @@ function atualizarApostas() {
         return;
     }
 
-    const apostasHTML = apostasAtual.map(aposta => `
+    document.getElementById('apostasContainer').innerHTML = apostasAtual.map(aposta => `
         <div class="aposta-item">
             <div class="aposta-info">
                 <div class="nome">${aposta.nome || 'Usuário'}</div>
@@ -145,8 +176,6 @@ function atualizarApostas() {
             <div class="aposta-valor">R$ ${parseFloat(aposta.valor).toFixed(2)}</div>
         </div>
     `).join('');
-
-    document.getElementById('apostasContainer').innerHTML = apostasHTML;
 }
 
 function atualizarUsuarios() {
@@ -180,14 +209,6 @@ function atualizarUsuarios() {
     }).join('');
 
     document.getElementById('usuariosContainer').innerHTML = `<div style="margin-bottom: 15px;">${usuariosHTML}</div>`;
-
-    document.querySelectorAll('.btn-promover').forEach(btn => {
-        btn.onclick = (e) => { e.preventDefault(); promoverUsuario(btn.dataset.userId, btn.dataset.userNome); };
-    });
-
-    document.querySelectorAll('.btn-rebaixar').forEach(btn => {
-        btn.onclick = (e) => { e.preventDefault(); rebaixarUsuario(btn.dataset.userId, btn.dataset.userNome); };
-    });
 }
 
 function atualizarVencedor() {
@@ -208,11 +229,10 @@ function atualizarVencedor() {
 
     const timesArray = Array.isArray(resumoAtual.times) ? resumoAtual.times : Object.keys(resumoAtual.times || {});
     
-    const vencedorHTML = timesArray.map(time => {
+    document.getElementById('vencedorSection').innerHTML = timesArray.map(time => {
         let percentual = 0;
         if (estatisticasAtual && estatisticasAtual.totalArrecadado > 0) {
-            const timeArrecadado = estatisticasAtual.totalPorTime[time] || 0;
-            percentual = (timeArrecadado / estatisticasAtual.totalArrecadado) * 100;
+            percentual = ((estatisticasAtual.totalPorTime[time] || 0) / estatisticasAtual.totalArrecadado) * 100;
         } else if (!Array.isArray(resumoAtual.times) && resumoAtual.times[time]) {
             percentual = resumoAtual.times[time].percentual || 0;
         }
@@ -224,50 +244,31 @@ function atualizarVencedor() {
         `;
     }).join('');
 
-    document.getElementById('vencedorSection').innerHTML = vencedorHTML;
-
     document.querySelectorAll('.vencedor-btn').forEach(btn => {
         btn.onclick = (e) => { e.preventDefault(); definirVencedor(btn.dataset.time); };
     });
 }
 
-function mostrarAlerta(mensagem, tipo = 'success') {
-    const alertContainer = document.getElementById('alertContainer');
-    if(alertContainer) {
-        alertContainer.innerHTML = `<div class="alert alert-${tipo}">${mensagem}</div>`;
-        setTimeout(() => { alertContainer.innerHTML = ''; }, 5000);
-    } else {
-        alert(mensagem);
-    }
-}
-
+// ==========================================
+// 🚀 CORE: Ações de Mutação (POST)
+// ==========================================
 async function alterarStatusApostas(abrir) {
     try {
         const response = await fetch(`${API_URL}/eventos/ativo/apostas`, { 
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-            body: JSON.stringify({ abrir: abrir })
+            body: JSON.stringify({ abrir })
         });
         
         let data = {}; try { data = await response.json(); } catch(e){}
 
         if (response.ok) {
             mostrarAlerta(`✅ Apostas ${abrir ? 'Abertas' : 'Fechadas'} com sucesso!`, 'success');
-            await carregarDados();
+            await carregarDados(); // UI recarrega limpa pois o GET agora evita cache
         } else {
-            const msgErro = (typeof data.error === 'string' ? data.error : data.message) || data.erro || 'Erro ao alterar status';
-            mostrarAlerta(msgErro, 'error');
+            mostrarAlerta(extrairErro(data), 'error');
         }
     } catch (error) { mostrarAlerta('Erro de conexão com o servidor', 'error'); }
-}
-
-async function abrirApostas() {
-    alterarStatusApostas(true);
-}
-
-async function fecharApostas() {
-    if (!confirm('Deseja fechar as apostas? Ninguém mais poderá apostar.')) return;
-    alterarStatusApostas(false); 
 }
 
 async function definirVencedor(time) {
@@ -285,8 +286,7 @@ async function definirVencedor(time) {
             mostrarAlerta(`🏆 Vencedor definido!`, 'success'); 
             await carregarDados(); 
         } else {
-            const msgErro = (typeof data.error === 'string' ? data.error : data.message) || data.erro || 'Erro ao definir vencedor';
-            mostrarAlerta(msgErro, 'error');
+            mostrarAlerta(extrairErro(data), 'error');
         }
     } catch (error) { mostrarAlerta('Erro de conexão', 'error');}
 }
@@ -305,21 +305,17 @@ async function resetarEvento() {
     try {
         const response = await fetch(`${API_URL}/eventos/resetar`, { 
             method: 'POST', 
-            headers: { 
-                'Content-Type': 'application/json',
-                'Accept': 'application/json' 
-            },
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
             body: JSON.stringify({ nome, times })
         });
 
         const data = await response.json();
 
-        if (response.ok && data.sucesso) { 
+        if (response.ok) { 
             mostrarAlerta('✅ Novo evento criado com sucesso!', 'success'); 
             await carregarDados(); 
         } else {
-            const msgErro = (typeof data.error === 'string' ? data.error : data.message) || data.erro || 'Erro ao criar novo evento';
-            mostrarAlerta(msgErro, 'error');
+            mostrarAlerta(extrairErro(data), 'error');
         }
     } catch (error) { 
         mostrarAlerta('Erro de conexão com o servidor', 'error'); 
@@ -327,21 +323,20 @@ async function resetarEvento() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    const btnLogout = document.getElementById('btnLogout');
-    const btnAtualizar = document.getElementById('btnAtualizar');
+    const attachClick = (id, fn) => {
+        const el = document.getElementById(id);
+        if (el) el.onclick = (e) => { e.preventDefault(); fn(); };
+    };
 
-    if (btnLogout) btnLogout.onclick = (e) => { e.preventDefault(); logout(); };
-    if (btnAtualizar) btnAtualizar.onclick = (e) => { e.preventDefault(); carregarDados(); };
-
-    const btnAbrir = document.getElementById('btnAbrir');
-    const btnFechar = document.getElementById('btnFechar');
-    const btnReset = document.getElementById('btnReset');
-
-    if (btnAbrir) btnAbrir.onclick = (e) => { e.preventDefault(); abrirApostas(); };
-    if (btnFechar) btnFechar.onclick = (e) => { e.preventDefault(); fecharApostas(); };
-    if (btnReset) btnReset.onclick = (e) => { e.preventDefault(); resetarEvento(); };
+    attachClick('btnLogout', logout);
+    attachClick('btnAtualizar', carregarDados);
+    attachClick('btnAbrir', () => alterarStatusApostas(true));
+    attachClick('btnFechar', () => {
+        if (confirm('Deseja fechar as apostas? Ninguém mais poderá apostar.')) alterarStatusApostas(false);
+    });
+    attachClick('btnReset', resetarEvento);
 
     verificarAuth();
     carregarDados();
-    setInterval(carregarDados, 10000);
+    setInterval(carregarDados, 15000); // Polling com menor frequência para otimizar UI
 });

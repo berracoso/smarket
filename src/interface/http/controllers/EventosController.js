@@ -13,10 +13,17 @@ class EventosController {
         this.resetarEventoUseCase = resetarEventoUseCase;
     }
 
+    // Método utilitário privado para blindar a extração do ID independente do middleware de Auth
+    _safeGetUserId(req) {
+        const id = req.userId || req.user?.id || req.session?.userId;
+        if (!id) throw new Error('Não foi possível identificar o usuário autenticado na requisição.');
+        return id;
+    }
+
     async ativo(req, res, next) {
         try {
             const resultado = await this.obterEventoAtivoUseCase.executar();
-            res.json(resultado);
+            res.status(200).json(resultado);
         } catch (erro) {
             next(erro);
         }
@@ -25,8 +32,10 @@ class EventosController {
     async criar(req, res, next) {
         try {
             const { nome, times } = req.body;
+            const userId = this._safeGetUserId(req);
+
             const resultado = await this.criarNovoEventoUseCase.executar({
-                userId: req.user.id, // CORRIGIDO AQUI
+                userId,
                 nome,
                 times
             });
@@ -39,11 +48,16 @@ class EventosController {
     async toggleApostas(req, res, next) {
         try {
             const { abrir } = req.body;
+            const userId = this._safeGetUserId(req);
+
+            // Validação estrita do booleano antes de enviar para o Use Case
+            const isAbrir = abrir === true || String(abrir).toLowerCase() === 'true';
+
             const resultado = await this.abrirFecharApostasUseCase.executar({
-                userId: req.user.id, // CORRIGIDO AQUI
-                abrir: abrir === true || abrir === 'true'
+                userId,
+                abrir: isAbrir
             });
-            res.json(resultado);
+            res.status(200).json(resultado);
         } catch (erro) {
             next(erro);
         }
@@ -52,11 +66,13 @@ class EventosController {
     async definirVencedor(req, res, next) {
         try {
             const { timeVencedor } = req.body;
+            const userId = this._safeGetUserId(req);
+
             const resultado = await this.definirVencedorUseCase.executar({
-                userId: req.user.id, // CORRIGIDO AQUI
+                userId,
                 timeVencedor
             });
-            res.json(resultado);
+            res.status(200).json(resultado);
         } catch (erro) {
             next(erro);
         }
@@ -65,12 +81,14 @@ class EventosController {
     async resetar(req, res, next) {
         try {
             const { nome, times } = req.body;
+            const userId = this._safeGetUserId(req);
+
             const resultado = await this.resetarEventoUseCase.executar({
-                userId: req.user.id, // CORRIGIDO AQUI
+                userId,
                 nome,
                 times
             });
-            res.json(resultado);
+            res.status(200).json(resultado); // Reset é uma operação com 200 OK
         } catch (erro) {
             next(erro);
         }
