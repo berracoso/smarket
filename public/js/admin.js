@@ -6,11 +6,24 @@ let usuariosLista = [];
 let usuarioLogado = null;
 
 // ==========================================
-// 🛡️ CORE: Utilitários Anti-Bugs
+// 🛡️ CORE: Utilitários Anti-Bugs & Headers
 // ==========================================
+
+// Função CRUCIAL: Adiciona o Token de Autenticação em todas as requisições
+function getAuthHeaders() {
+    const token = localStorage.getItem('token');
+    return { 
+        'Content-Type': 'application/json', 
+        'Accept': 'application/json', 
+        'Cache-Control': 'no-store, no-cache, must-revalidate',
+        'Pragma': 'no-cache',
+        'Authorization': `Bearer ${token}` 
+    };
+}
+
 const extrairErro = (data) => {
     if (!data) return 'Erro desconhecido de rede.';
-    if (data.mensagem) return data.mensagem; // Padrão do error-handler.js
+    if (data.mensagem) return data.mensagem;
     if (data.message) return data.message;
     if (typeof data.erro === 'string') return data.erro;
     if (typeof data.error === 'string') return data.error;
@@ -33,7 +46,7 @@ function mostrarAlerta(mensagem, tipo = 'success') {
 async function verificarAuth() {
     try {
         const response = await fetch(`${API_URL}/auth/me?_t=${Date.now()}`, {
-            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'Cache-Control': 'no-store' }
+            headers: getAuthHeaders()
         });
 
         if (response.ok) {
@@ -53,7 +66,7 @@ async function verificarAuth() {
 }
 
 async function logout() {
-    try { await fetch(`${API_URL}/auth/logout`, { method: 'POST' }); } catch (error) {}
+    try { await fetch(`${API_URL}/auth/logout`, { method: 'POST', headers: getAuthHeaders() }); } catch (error) {}
     localStorage.removeItem('token');
     localStorage.removeItem('usuario');
     window.location.href = '/login';
@@ -61,14 +74,13 @@ async function logout() {
 
 async function carregarDados() {
     try {
-        // CORREÇÃO: Prevenção rigorosa de cache do navegador usando timestamp e headers no-store
-        const noCacheHeaders = { 'Accept': 'application/json', 'Cache-Control': 'no-store, no-cache, must-revalidate', 'Pragma': 'no-cache' };
         const ts = Date.now();
 
+        // Alterado de /dados para /apostas/todas para bater com a nova arquitetura
         const [resumoRes, dadosRes, usuariosRes] = await Promise.all([
-            fetch(`${API_URL}/eventos/ativo?_t=${ts}`, { headers: noCacheHeaders }), 
-            fetch(`${API_URL}/dados?_t=${ts}`, { headers: noCacheHeaders }),
-            fetch(`${API_URL}/usuarios?_t=${ts}`, { headers: noCacheHeaders })
+            fetch(`${API_URL}/eventos/ativo?_t=${ts}`, { headers: getAuthHeaders() }), 
+            fetch(`${API_URL}/apostas/todas?_t=${ts}`, { headers: getAuthHeaders() }),
+            fetch(`${API_URL}/usuarios?_t=${ts}`, { headers: getAuthHeaders() })
         ]);
 
         if (resumoRes.ok) {
@@ -79,18 +91,18 @@ async function carregarDados() {
 
         if (dadosRes.ok) {
             const dadosCompletos = await dadosRes.json();
-            apostasAtual = dadosCompletos.apostas || [];
+            // Suporta tanto array direto quanto objeto { apostas: [] }
+            apostasAtual = dadosCompletos.apostas || (Array.isArray(dadosCompletos) ? dadosCompletos : []);
         }
 
         if (usuariosRes.ok) {
             const usuariosData = await usuariosRes.json();
-            usuariosLista = usuariosData.usuarios || usuariosData;
+            usuariosLista = usuariosData.usuarios || (Array.isArray(usuariosData) ? usuariosData : []);
         }
 
         atualizarInterface();
     } catch (error) {
         console.error("Erro na sincronia:", error);
-        mostrarAlerta('Erro ao carregar dados atualizados do servidor', 'error');
     }
 }
 
@@ -170,8 +182,8 @@ function atualizarApostas() {
     document.getElementById('apostasContainer').innerHTML = apostasAtual.map(aposta => `
         <div class="aposta-item">
             <div class="aposta-info">
-                <div class="nome">${aposta.nome || 'Usuário'}</div>
-                <div class="detalhes">${aposta.time} • ${new Date(aposta.timestamp || aposta.criadoEm).toLocaleString('pt-BR')}</div>
+                <div class="nome">${aposta.nome || aposta.usuarioId || 'Usuário'}</div>
+                <div class="detalhes">${aposta.time} • ${new Date(aposta.timestamp || aposta.criadoEm || Date.now()).toLocaleString('pt-BR')}</div>
             </div>
             <div class="aposta-valor">R$ ${parseFloat(aposta.valor).toFixed(2)}</div>
         </div>
@@ -191,10 +203,10 @@ function atualizarUsuarios() {
         let acoesHTML = '';
 
         if (isUsuarioComum) {
-            acoesHTML += `<button class="btn btn-success btn-small btn-promover" data-user-id="${usuario.id}" data-user-nome="${usuario.nome}" style="padding: 6px 12px; font-size: 0.85em; margin-right: 5px;">⬆️ Promover</button>`;
+            acoesHTML += `<button class="btn btn-success btn-small btn-promover" data-user-id="${usuario.id}" style="padding: 6px 12px; font-size: 0.85em; margin-right: 5px;">⬆️ Promover</button>`;
         }
         if (isAdmin && usuarioLogado && usuarioLogado.isSuperAdmin) {
-            acoesHTML += `<button class="btn btn-danger btn-small btn-rebaixar" data-user-id="${usuario.id}" data-user-nome="${usuario.nome}" style="padding: 6px 12px; font-size: 0.85em;">⬇️ Rebaixar</button>`;
+            acoesHTML += `<button class="btn btn-danger btn-small btn-rebaixar" data-user-id="${usuario.id}" style="padding: 6px 12px; font-size: 0.85em;">⬇️ Rebaixar</button>`;
         }
 
         return `
@@ -233,8 +245,6 @@ function atualizarVencedor() {
         let percentual = 0;
         if (estatisticasAtual && estatisticasAtual.totalArrecadado > 0) {
             percentual = ((estatisticasAtual.totalPorTime[time] || 0) / estatisticasAtual.totalArrecadado) * 100;
-        } else if (!Array.isArray(resumoAtual.times) && resumoAtual.times[time]) {
-            percentual = resumoAtual.times[time].percentual || 0;
         }
 
         return `
@@ -252,11 +262,34 @@ function atualizarVencedor() {
 // ==========================================
 // 🚀 CORE: Ações de Mutação (POST)
 // ==========================================
+
+// Função Adicionada: Gestão de Usuários
+async function alterarPermissaoUsuario(id, acao) {
+    if (!confirm(`Tem certeza que deseja ${acao} este usuário?`)) return;
+    try {
+        const response = await fetch(`${API_URL}/usuarios/${id}/${acao}`, {
+            method: 'POST',
+            headers: getAuthHeaders()
+        });
+        
+        let data = {}; try { data = await response.json(); } catch(e){}
+
+        if (response.ok) {
+            mostrarAlerta(`✅ Usuário ${acao === 'promover' ? 'promovido' : 'rebaixado'} com sucesso!`);
+            await carregarDados();
+        } else {
+            mostrarAlerta(extrairErro(data), 'error');
+        }
+    } catch (err) {
+        mostrarAlerta('Erro de conexão com o servidor', 'error');
+    }
+}
+
 async function alterarStatusApostas(abrir) {
     try {
         const response = await fetch(`${API_URL}/eventos/ativo/apostas`, { 
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+            headers: getAuthHeaders(),
             body: JSON.stringify({ abrir })
         });
         
@@ -264,7 +297,7 @@ async function alterarStatusApostas(abrir) {
 
         if (response.ok) {
             mostrarAlerta(`✅ Apostas ${abrir ? 'Abertas' : 'Fechadas'} com sucesso!`, 'success');
-            await carregarDados(); // UI recarrega limpa pois o GET agora evita cache
+            await carregarDados();
         } else {
             mostrarAlerta(extrairErro(data), 'error');
         }
@@ -276,7 +309,7 @@ async function definirVencedor(time) {
     try {
         const response = await fetch(`${API_URL}/eventos/ativo/vencedor`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+            headers: getAuthHeaders(),
             body: JSON.stringify({ timeVencedor: time })
         });
         
@@ -305,7 +338,7 @@ async function resetarEvento() {
     try {
         const response = await fetch(`${API_URL}/eventos/resetar`, { 
             method: 'POST', 
-            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+            headers: getAuthHeaders(),
             body: JSON.stringify({ nome, times })
         });
 
@@ -336,7 +369,19 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     attachClick('btnReset', resetarEvento);
 
+    // Event Delegation para botões criados dinamicamente (Promover/Rebaixar)
+    const usuariosContainer = document.getElementById('usuariosContainer');
+    if (usuariosContainer) {
+        usuariosContainer.addEventListener('click', (e) => {
+            if (e.target.classList.contains('btn-promover')) {
+                alterarPermissaoUsuario(e.target.dataset.userId, 'promover');
+            } else if (e.target.classList.contains('btn-rebaixar')) {
+                alterarPermissaoUsuario(e.target.dataset.userId, 'rebaixar');
+            }
+        });
+    }
+
     verificarAuth();
     carregarDados();
-    setInterval(carregarDados, 15000); // Polling com menor frequência para otimizar UI
+    setInterval(carregarDados, 15000);
 });

@@ -9,7 +9,6 @@ class ApostasController {
     async criar(req, res, next) {
         try {
             const { time, valor } = req.body;
-            // Pega ID do token JWT (seguro)
             const usuarioId = req.usuario.id;
 
             if (!time || !valor) {
@@ -31,7 +30,6 @@ class ApostasController {
         }
     }
 
-    // Método chamado pela rota GET /minhas
     async minhas(req, res, next) {
         try {
             const usuarioId = req.usuario.id;
@@ -42,16 +40,13 @@ class ApostasController {
         }
     }
 
-    // Método chamado pela rota GET /historico
     async historico(req, res, next) {
         try {
-            // Filtros da query string (pagina, limite, etc)
             const filtros = {
                 usuarioId: req.usuario.id,
                 ...req.query
             };
             
-            // Verifica se o caso de uso existe antes de executar (segurança)
             if (!this.obterHistoricoApostas) {
                  return res.status(501).json({ erro: 'Funcionalidade de histórico indisponível no momento.' });
             }
@@ -63,12 +58,26 @@ class ApostasController {
         }
     }
 
-    // Método chamado pela rota POST /simular
+    // NOVO MÉTODO: Usado pelo Painel Admin para buscar as apostas de todos os usuários
+    async todas(req, res, next) {
+        try {
+            if (!this.obterHistoricoApostas) {
+                return res.status(501).json({ erro: 'Funcionalidade indisponível.' });
+            }
+
+            // Ao não passar o usuarioId nos filtros, a maioria dos casos de uso de histórico retorna todas as apostas globais
+            const filtrosGlobais = { ...req.query };
+            
+            const resultado = await this.obterHistoricoApostas.executar(filtrosGlobais);
+            res.status(200).json(resultado);
+        } catch (erro) {
+            next(erro);
+        }
+    }
+
     async simular(req, res, next) {
         try {
-            const { valor, time } = req.body; // Geralmente POST envia no body
-            
-            // Fallback para query se vier vazio (caso usem GET ou query params)
+            const { valor, time } = req.body; 
             const valorFinal = valor || req.query.valor;
             const timeFinal = time || req.query.time;
 
