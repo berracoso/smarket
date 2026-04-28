@@ -68,4 +68,13 @@ app.get('*', (req, res, next) => {
 
 app.use(errorHandler);
 
+// --- CORREÇÃO: OBRIGATÓRIO PARA O RENDER RECONHECER A APLICAÇÃO ---
+// Garante que o servidor abre a porta e escuta requisições
+if (require.main === module) {
+  const PORT = process.env.PORT || 3000;
+  app.listen(PORT, () => {
+    console.log(`🚀 Servidor rodando na porta ${PORT}`);
+  });
+}
+
 module.exports = app;

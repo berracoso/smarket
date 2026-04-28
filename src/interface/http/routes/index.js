@@ -27,8 +27,10 @@ if (usersRoutes) {
 }
 
 // --- CORREÇÃO: CONECTANDO AS ROTAS DO PAINEL ADMIN ---
-// Passamos o middleware de autenticação para proteger as rotas
-const legacyRoutes = require('./legacy.routes')(null, null, container.authenticationMiddleware);
+// O legacyRoutes agora exporta diretamente o Router, basta fazer o require normal.
+const legacyRoutes = require('./legacy.routes');
+
+// Anexa as rotas na raiz do servidor
 router.use('/', legacyRoutes); 
 
 // Rota de compatibilidade
