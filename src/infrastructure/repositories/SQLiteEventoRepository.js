@@ -5,29 +5,52 @@ class SQLiteEventoRepository {
         this.dbPromise = dbPromise;
     }
 
-    async salvar(evento) {
+    // 1. Método estrito para INSERIR novos eventos
+    async criar(evento) {
         const db = await this.dbPromise();
         const timesJson = JSON.stringify(evento.times);
         
         await db.run(
             `INSERT INTO eventos (id, codigo, nome, times, aberto, vencedor, status, criadoEm, finalizadoEm) 
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-             ON CONFLICT(id) DO UPDATE SET 
-             aberto = excluded.aberto, vencedor = excluded.vencedor, status = excluded.status, finalizadoEm = excluded.finalizadoEm`,
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
                 evento.id, evento.codigo, evento.nome, timesJson, 
                 evento.aberto ? 1 : 0, evento.vencedor, evento.status, evento.criadoEm, evento.finalizadoEm
             ]
         );
-    }
-
-    async atualizar(evento) {
-        return await this.salvar(evento);
-    }
-
-    async criar(evento) {
-        await this.salvar(evento);
         return evento.id;
+    }
+
+    // 2. Método estrito para ATUALIZAR eventos existentes (Evita o erro de conflito UNIQUE)
+    async atualizar(evento) {
+        const db = await this.dbPromise();
+        const timesJson = JSON.stringify(evento.times);
+        
+        await db.run(
+            `UPDATE eventos SET 
+             codigo = ?, nome = ?, aberto = ?, vencedor = ?, status = ?, finalizadoEm = ?, times = ? 
+             WHERE id = ?`,
+            [
+                evento.codigo,
+                evento.nome,
+                evento.aberto ? 1 : 0, 
+                evento.vencedor, 
+                evento.status, 
+                evento.finalizadoEm, 
+                timesJson, 
+                evento.id
+            ]
+        );
+    }
+
+    // 3. Fallback inteligente exigido pelos Use Cases mais antigos
+    async salvar(evento) {
+        const existente = await this.buscarPorId(evento.id);
+        if (existente) {
+            await this.atualizar(evento);
+        } else {
+            await this.criar(evento);
+        }
     }
 
     async finalizar(id) {
@@ -51,10 +74,6 @@ class SQLiteEventoRepository {
         }
     }
 
-    // ==========================================
-    // 🛡️ CORREÇÃO DE CONTRATO (ALIAS)
-    // ==========================================
-    // Atende aos Use Cases de Leitura
     async obterEventoAtivo() {
         const db = await this.dbPromise();
         const row = await db.get("SELECT * FROM eventos WHERE status = 'ativo' LIMIT 1");
@@ -62,11 +81,10 @@ class SQLiteEventoRepository {
         return this._mapToEntity(row);
     }
 
-    // Atende aos Use Cases de Mutação (Apostas, Vencedor, Reset)
+    // Alias necessário para a Clean Architecture
     async buscarEventoAtivo() {
         return await this.obterEventoAtivo();
     }
-    // ==========================================
 
     async buscarPorId(id) {
         const db = await this.dbPromise();
@@ -77,11 +95,9 @@ class SQLiteEventoRepository {
 
     _mapToEntity(row) {
         let timesArray = [];
-        
         try {
             timesArray = row.times ? JSON.parse(row.times) : [];
         } catch (error) {
-            console.error(`Erro ao fazer parse dos times do evento ${row.id}:`, error);
             timesArray = []; 
         }
 
