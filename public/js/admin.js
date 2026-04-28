@@ -9,7 +9,6 @@ let usuarioLogado = null;
 // 🛡️ CORE: Utilitários Anti-Bugs & Headers
 // ==========================================
 
-// Função CRUCIAL: Adiciona o Token de Autenticação em todas as requisições
 function getAuthHeaders() {
     const token = localStorage.getItem('token');
     return { 
@@ -76,7 +75,6 @@ async function carregarDados() {
     try {
         const ts = Date.now();
 
-        // Alterado de /dados para /apostas/todas para bater com a nova arquitetura
         const [resumoRes, dadosRes, usuariosRes] = await Promise.all([
             fetch(`${API_URL}/eventos/ativo?_t=${ts}`, { headers: getAuthHeaders() }), 
             fetch(`${API_URL}/apostas/todas?_t=${ts}`, { headers: getAuthHeaders() }),
@@ -85,13 +83,13 @@ async function carregarDados() {
 
         if (resumoRes.ok) {
             const data = await resumoRes.json();
-            resumoAtual = data.evento || data;
+            // CORREÇÃO: Garante que lida corretamente com a resposta estruturada
+            resumoAtual = data.evento || null;
             estatisticasAtual = data.estatisticas || null;
         }
 
         if (dadosRes.ok) {
             const dadosCompletos = await dadosRes.json();
-            // Suporta tanto array direto quanto objeto { apostas: [] }
             apostasAtual = dadosCompletos.apostas || (Array.isArray(dadosCompletos) ? dadosCompletos : []);
         }
 
@@ -128,7 +126,8 @@ function atualizarInterface() {
 }
 
 function atualizarStatus() {
-    const estaAberto = resumoAtual.status === 'aberto' || resumoAtual.aberto === true;
+    // CORREÇÃO CRUCIAL AQUI: Suporte à nova propriedade apostasAbertas
+    const estaAberto = resumoAtual.apostasAbertas === true || resumoAtual.aberto === true;
     
     let totalGeral = 0;
     if (estatisticasAtual && estatisticasAtual.totalArrecadado !== undefined) {
@@ -225,7 +224,8 @@ function atualizarUsuarios() {
 
 function atualizarVencedor() {
     const alert = document.getElementById('vencedorAlert');
-    const estaAberto = resumoAtual.status === 'aberto' || resumoAtual.aberto === true;
+    // CORREÇÃO AQUI: Avaliar corretamente para bloquear vencedor enquanto aberto
+    const estaAberto = resumoAtual.apostasAbertas === true || resumoAtual.aberto === true;
 
     if (estaAberto) {
         if(alert) { alert.style.display = 'block'; alert.className = 'alert alert-warning'; alert.textContent = '⚠️ Feche as apostas antes de definir o vencedor'; }
@@ -263,7 +263,6 @@ function atualizarVencedor() {
 // 🚀 CORE: Ações de Mutação (POST)
 // ==========================================
 
-// Função Adicionada: Gestão de Usuários
 async function alterarPermissaoUsuario(id, acao) {
     if (!confirm(`Tem certeza que deseja ${acao} este usuário?`)) return;
     try {
@@ -369,7 +368,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     attachClick('btnReset', resetarEvento);
 
-    // Event Delegation para botões criados dinamicamente (Promover/Rebaixar)
     const usuariosContainer = document.getElementById('usuariosContainer');
     if (usuariosContainer) {
         usuariosContainer.addEventListener('click', (e) => {

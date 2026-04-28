@@ -1,7 +1,6 @@
 /**
  * Use Case: Obter Evento Ativo
- * 
- * Busca o evento ativo no momento e retorna com informações agregadas.
+ * * Busca o evento ativo no momento e retorna com informações agregadas.
  */
 
 class ObterEventoAtivo {
@@ -52,6 +51,7 @@ class ObterEventoAtivo {
                 nome: evento.nome,
                 times: evento.times,
                 apostasAbertas: evento.aberto,
+                aberto: evento.aberto, // Propriedade adicionada para compatibilidade máxima com o painel administrativo
                 status: evento.status,
                 vencedor: evento.vencedor,
                 criadoEm: evento.criadoEm
