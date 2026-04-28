@@ -21,7 +21,7 @@ const ObterEventoAtivo = require('../../application/use-cases/eventos/ObterEvent
 const CriarNovoEvento = require('../../application/use-cases/eventos/CriarNovoEvento');
 const AbrirFecharApostas = require('../../application/use-cases/eventos/AbrirFecharApostas');
 const DefinirVencedor = require('../../application/use-cases/eventos/DefinirVencedor');
-const ResetarEvento = require('../../application/use-cases/eventos/ResetarEvento'); // <--- ADICIONADO AQUI
+const ResetarEvento = require('../../application/use-cases/eventos/ResetarEvento');
 const CriarAposta = require('../../application/use-cases/apostas/CriarAposta');
 const ListarMinhasApostas = require('../../application/use-cases/apostas/ListarMinhasApostas');
 
@@ -31,11 +31,11 @@ const EventosController = require('../../interface/http/controllers/EventosContr
 const ApostasController = require('../../interface/http/controllers/ApostasController');
 const UsersController = require('../../interface/http/controllers/UsersController');
 
-// --- INSTANCIAÇÃO ---
+// --- INSTANCIAÇÃO DAS DEPENDÊNCIAS ---
 const hasher = new BcryptHasher();
 const sessionManager = new SessionManager(); 
 
-// Repositories (Passamos a função getDbConnection)
+// Repositories
 const usuarioRepository = new SQLiteUsuarioRepository(getDbConnection);
 const eventoRepository = new SQLiteEventoRepository(getDbConnection);
 const apostaRepository = new SQLiteApostaRepository(getDbConnection);
@@ -44,21 +44,30 @@ const apostaRepository = new SQLiteApostaRepository(getDbConnection);
 const authenticationMiddleware = new AuthenticationMiddleware(usuarioRepository);
 const authorizationMiddleware = new AuthorizationMiddleware(usuarioRepository);
 
-// Use Cases
+// --- INSTANCIAÇÃO DOS USE CASES (CORRIGIDA) ---
 const registrarUsuario = new RegistrarUsuario(usuarioRepository, hasher);
 const fazerLogin = new FazerLogin(usuarioRepository, hasher);
 const obterEventoAtivo = new ObterEventoAtivo(eventoRepository, apostaRepository);
+
+// ATENÇÃO: Se o CriarNovoEvento também validar usuário, ele precisa receber o usuarioRepository.
+// Pela estrutura padrão, passaremos apenas o evento (ajuste se seu Use Case pedir 2 parametros).
 const criarNovoEvento = new CriarNovoEvento(eventoRepository);
-const abrirFecharApostas = new AbrirFecharApostas(eventoRepository);
+
+// 🛡️ CORREÇÕES CRÍTICAS DE INJEÇÃO ABAIXO 🛡️
+// Antes: new AbrirFecharApostas(eventoRepository)
+const abrirFecharApostas = new AbrirFecharApostas(eventoRepository, usuarioRepository);
+
+// Antes: new ResetarEvento(eventoRepository)
+const resetarEvento = new ResetarEvento(eventoRepository, usuarioRepository);
+// ------------------------------------------------
+
 const definirVencedor = new DefinirVencedor(eventoRepository, apostaRepository, usuarioRepository);
-const resetarEvento = new ResetarEvento(eventoRepository); // <--- INSTANCIADO AQUI
 const criarAposta = new CriarAposta(apostaRepository, eventoRepository, usuarioRepository);
 const listarMinhasApostas = new ListarMinhasApostas(apostaRepository);
 
-// Controllers
+// --- INSTANCIAÇÃO DOS CONTROLLERS ---
 const authController = new AuthController(fazerLogin, registrarUsuario);
 
-// <--- CORREÇÃO CRÍTICA: ORDEM DOS ARGUMENTOS ARRUMADA --->
 const eventosController = new EventosController(
   criarNovoEvento,
   obterEventoAtivo,
